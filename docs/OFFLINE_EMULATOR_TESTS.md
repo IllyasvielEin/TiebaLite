@@ -162,11 +162,29 @@ Two read-only capacity checks provide measured diagnostics:
    the complete 6144 MiB data image plus the install allowance below. It does not delete
    unrelated runner files to make room.
 2. After boot and the APK hash recheck, before **either** `adb install`, the guest check
-   reads only `stat -f -c %S,%b,%f,%a /data` and `df -Pk /data` through the explicit emulator
+   reads `stat -f -c %S,%b,%f,%a /data` and `df -Pk /data` through the explicit emulator
    serial. Each query has a 15-second timeout. It records block size, total/free/available
    block counts, df byte counts and each APK's compressed/uncompressed size. It uses the
    lower available-space measurement and fails closed on missing, malformed or
    insufficient data.
+
+Toybox `df` selects a mount with the requested path's device identity and can report a
+bind-mount alias rather than the literal `/data` path. The parser still requires exactly
+one df data row, explicit KiB units and valid numeric accounting. For an alias it performs
+one additional read-only `stat -L -c %d /data <reported_mount>` probe and requires exactly
+two equal positive device IDs. The alias must first pass a 192-character absolute-path
+allowlist with no whitespace, shell metacharacters, empty components or `.`/`..` segments;
+an unsafe path never becomes an adb shell argument. Literal `/data` needs no identity
+probe. Identity failure or uncertainty blocks installation; statfs alone cannot pass.
+See [Android Toybox df source](https://android.googlesource.com/platform/external/toybox/+/7aa651a/toys/posix/df.c)
+and [Toybox stat formats](https://raw.githubusercontent.com/landley/toybox/master/toys/other/stat.c).
+
+Run `38270265662` stopped before installation with “Unexpected guest /data df output.”
+Its retained report omitted df stdout/stderr and the earlier successful statfs parse,
+so the exact unexpected format or mount name cannot be reconstructed. A mount alias is
+a source-supported possibility, not an observed diagnosis. Regression fixtures for the
+parser are synthetic/source-derived, not captured API37 output; runtime validation of
+this parser change remains pending.
 
 The install allowance is `2 × combined APK bytes + combined uncompressed ZIP entry bytes
 + 1 GiB reserve`. The two copies allow for staging and installed APKs; full ZIP entry sizes
@@ -176,11 +194,16 @@ reproduce PackageInstaller's exact allocation policy or guarantee installation. 
 remains the final authority. No low-storage checks, permissions, install-location policy
 or threshold settings are disabled or changed.
 
-`storage-host.json` and `storage-guest.json` contain only these numeric measurements,
-formula inputs and a short status/error. They are each capped at **4 KiB**, retained for
-three days with the other allowlisted reports, and include no raw filesystem dump,
-application data or APK contents. A failed preflight leaves the diagnostic report and
-fails the job; ordinary emulator/KVM/key cleanup still runs.
+`storage-host.json` and `storage-guest.json` contain the numeric measurements, formula
+inputs and short status/error. Guest reports also retain each fixed probe's exit or
+timeout status, parse stage and stdout/stderr previews capped at 128 characters each,
+with original character counts and truncation flags. Non-ASCII/control characters are
+replaced for printable diagnostics; previews can be shortened further to preserve the
+total report limit without trimming numerical evidence. A later failure preserves earlier parsed evidence
+without granting permission to install. Reports are each capped at **4 KiB** and retained
+for three days with the other allowlisted reports; they include no filesystem dump,
+application data or APK contents. A failed preflight writes the bounded diagnostic report
+and fails the job; ordinary emulator/KVM/key cleanup still runs.
 
 ### Explicit one-run KVM access
 
