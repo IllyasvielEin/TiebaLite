@@ -1,5 +1,6 @@
 """Host-only guards: these do NOT claim Android compilation or emulator success."""
 import pathlib
+import re
 import unittest
 import xml.etree.ElementTree as ET
 from verify_offline_apks import APPLICATION_ID, HOST, verify_dumps
@@ -98,8 +99,26 @@ class OfflineSmokeGuards(unittest.TestCase):
         self.assertIn("workflow_dispatch:", source)
         self.assertIn("refs/heads/4.0-dev", source)
         self.assertIn("max-parallel: 1", source)
-        self.assertIn("kvm-diagnostics.txt", source)
-        self.assertIn("getfacl -p /dev/kvm", source)
+        self.assertEqual(['37', '35'], re.findall(r'^          - api: (\d+)$', source, re.M))
+        self.assertIn('runs-on: ubuntu-24.04', source)
+        self.assertIn("kvm-diagnostics.json", source)
+        self.assertIn("kvm-restoration.json", source)
+        self.assertIn("default: false", source)
+        self.assertIn("type: boolean", source)
+        self.assertIn("inputs.allow_kvm_access == true", source)
+        self.assertIn("github.run_attempt == 1", source)
+        self.assertIn("python3 scripts/test_kvm_access.py", source)
+        self.assertLess(source.index("verify_offline_apks.py"), source.index("kvm_access.py acquire"))
+        self.assertLess(source.index("kvm_access.py acquire"), source.index("-accel-check"))
+        self.assertLess(source.index("-accel-check"), source.index("create avd"))
+        self.assertLess(source.index("kill -KILL"), source.index("kvm_access.py restore"))
+        self.assertLess(source.index("kvm_access.py restore"), source.index('rm -rf --'))
+        restore_step = source.split("- name: Restore and verify", 1)[1].split("- name:", 1)[0]
+        cleanup_step = source.split("- name: Remove disposable state", 1)[1].split("- name:", 1)[0]
+        for step in (restore_step, cleanup_step):
+            self.assertIn("always()", step)
+            self.assertNotIn("continue-on-error", step)
+        self.assertNotIn("kvm_access.py restore ||", source)
         self.assertIn("retention-days: 3", source)
         self.assertNotIn("secrets.", source)
         self.assertNotIn("chmod", source)

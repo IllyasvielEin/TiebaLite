@@ -4,13 +4,18 @@
 
 The manual **Offline Android emulator smoke tests** workflow can run only from the trusted
 `4.0-dev` default branch. It uses standard `ubuntu-24.04` runners, read-only repository
-permission, SHA-pinned actions and a two-entry matrix with `max-parallel: 1`:
+permission, SHA-pinned actions and a two-entry matrix with `max-parallel: 1`. Both jobs
+require the default-false `allow_kvm_access` dispatch input to be explicitly enabled
+under the owner's approval for that dispatch, and `github.run_attempt == 1`:
 
 - Primary: API 37, `system-images;android-37.0;google_apis;x86_64`
 - Regression: API 35, `system-images;android-35;google_apis;x86_64`
 
-No workflow was dispatched as part of writing these files. Local host-only tests do not
-establish an Android build or emulator pass. The available development container had
+Local host-only tests do not establish an Android build, real KVM permission change,
+ACL restoration on a hosted runner, or emulator pass. Earlier hosted diagnostics found
+`/dev/kvm` (character device 10:232), owner 0, group 993, mode 0660. The runner was UID
+1001 with groups 1001, 4, 100, 118 and 999, without read/write access. Those diagnostics
+do not establish a successful runtime test. The available development container had
 neither an Android SDK/JDK 17 toolchain nor `/dev/kvm`; runtime results remain pending
 until a separately approved run actually succeeds. Local Gradle 9.8.1/Java21 configuration
 confirmed the smoke assemble/test tasks are registered. A direct invocation of the
@@ -134,22 +139,68 @@ installed revisions, verifies `pixel_7` exists in the installed official AVD dev
 and confirms the booted device SDK. SDK package revisions are not
 immutable; the saved report identifies the versions used by each run.
 
-The workflow requires an already-readable/writable `/dev/kvm` and a successful official
-`emulator -accel-check`. Missing access is an actionable blocker, never a skipped pass.
-It does not change device permissions, groups, udev rules, host security settings or use
-a paid/larger runner. CPU-only emulation is not silently substituted.
+### Explicit one-run KVM access
+
+The owner-approved dispatch covers only these two disposable API37/API35 runners. Keep
+`allow_kvm_access` false unless the owner has approved that particular dispatch. The input
+is a record of dispatch approval, not blanket permission for later runs. GitHub's **Re-run
+jobs** path is deliberately blocked, even when it inherits a true input: a retry requires
+a fresh owner-approved dispatch. A false input skips both matrix jobs; it is not a passing
+runtime result.
+
+`scripts/kvm_access.py check` first records small numeric device/runner diagnostics without
+changing access. The helper grants access only **after** both isolated APKs have been built,
+verified to lack INTERNET, checked for disposable debug signatures, copied and hashed.
+It independently requires a manual first-attempt run on the trusted default branch, an
+explicit true input, matrix API 35 or 37, and actual/effective UID **1001**. Missing KVM,
+`getfacl`, `setfacl` or noninteractive `sudo` support is a failure; no extra utility or
+package installation is attempted.
+
+If access already exists, no ACL change or snapshot is made. Otherwise, the helper accepts
+only the observed simple root-owned 0660 ACL on character device **10:232**, with no
+extended or default ACL entries. Rejecting an unexpected extended ACL avoids accidentally
+widening another user's masked permissions. It saves the original numeric ACL and device
+identity in a private 0700 directory with 0600 files under `RUNNER_TEMP`, before running
+only `sudo -n setfacl -m u:1001:rw /dev/kvm`. The helper verifies the resulting ACL contains
+only that added UID and the required mask, and confirms read/write access. It never makes
+the device world-writable, changes groups, writes udev rules, or changes another host
+file. Only this brief interval grants every process running as UID 1001 access
+to KVM, so trusted source and a disposable runner remain important.
+
+The official `emulator -accel-check` must then succeed. CPU-only emulation is never
+silently substituted. No paid/larger runner is used.
+
+Separate `always()` cleanup steps stop the emulator, restore the original ACL, and remove
+the disposable debug key/APKs/AVD and logs. Restoration parses and validates the saved
+single-device numeric ACL, validates its run/API binding and unchanged device identity,
+and rejects symlink or hardlinked state files and symlink parent paths. The validated ACL
+is supplied through stdin to fixed-target `sudo -n setfacl --set-file=- /dev/kvm`; privileged
+multi-target `--restore` is not used. Exact original numeric `getfacl` output, mode, owner,
+group and device identity must all match after restoration. The private ACL snapshot is
+then removed, including after an ordinary restoration failure. Unsafe/tampered state is
+rejected rather than followed; the disposable runner is subsequently discarded.
+
+A restoration or state-cleanup failure fails the job and is retained in the small
+`kvm-restoration.json` report. It cannot prevent the later always-run debug-key cleanup
+or artifact reporting, and is never converted to a skipped/successful check. As with any
+CI cleanup, abrupt runner loss or a forced platform termination can prevent cleanup code
+from executing; the runner itself is disposable. Mocked host tests exercise these guards
+and failure paths but do not prove real hosted ACL restoration or emulator execution.
 
 ## Reports and reproduction
 
 The workflow uploads only allowlisted small text/JSON reports for three days: package
 versions, acceleration result, device API, packaged-manifest proof and instrumentation
-results. Each file is capped at 2 MiB. It does not upload APKs, signing keys, raw emulator
-logs, logcat, screenshots, heap dumps, AVD snapshots or Android userdata.
+results, plus numeric KVM diagnostics and restoration status. KVM reports are capped at
+4 KiB and other files at 2 MiB. The private original ACL/state is never uploaded. It does
+not upload APKs, signing keys, raw emulator logs, logcat, screenshots, heap dumps, AVD
+snapshots or Android userdata.
 
 Host checks (these do not need an SDK):
 
 ```sh
 python3 scripts/test_offline_smoke.py
+python3 scripts/test_kvm_access.py
 python3 app/src/test/compatibility/check_image_picker.py
 ```
 
