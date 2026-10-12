@@ -18,6 +18,7 @@ import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.annotation.CallSuper
 import androidx.annotation.ColorInt
 import androidx.annotation.Keep
@@ -108,6 +109,19 @@ abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity(), ExtraRefres
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (!HandleBackUtil.handleBackPress(this@BaseActivity)) {
+                    // Delegate to remaining callbacks/the Activity fallback without recursing.
+                    isEnabled = false
+                    try {
+                        onBackPressedDispatcher.onBackPressed()
+                    } finally {
+                        isEnabled = true
+                    }
+                }
+            }
+        })
         if (isNeedFixBg) fixBackground()
         getDeviceDensity()
         INSTANCE.addActivity(this)
@@ -200,12 +214,6 @@ abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity(), ExtraRefres
         super.setSupportActionBar(toolbar)
         if (toolbar is TintToolbar) {
             mTintToolbar = toolbar
-        }
-    }
-
-    override fun onBackPressed() {
-        if (!HandleBackUtil.handleBackPress(this)) {
-            super.onBackPressed()
         }
     }
 

@@ -6,9 +6,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission
-        android:name="android.permission.READ_PHONE_STATE"
-        android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -139,7 +136,7 @@
                 <data android:scheme="tblite" />
             </intent-filter>
 
-            <intent-filter android:autoVerify="true">
+            <intent-filter>
                 <data
                     android:host="unidispatch"
                     android:scheme="com.baidu.tieba" />
@@ -185,7 +182,7 @@
                 <data android:scheme="tblite" />
             </intent-filter>
 
-            <intent-filter android:autoVerify="true">
+            <intent-filter>
                 <data
                     android:host="unidispatch"
                     android:scheme="com.baidu.tieba" />
@@ -220,7 +217,7 @@
                 <data android:scheme="tblite" />
             </intent-filter>
 
-            <intent-filter android:autoVerify="true">
+            <intent-filter>
                 <data
                     android:host="unidispatch"
                     android:scheme="com.baidu.tieba" />
@@ -255,7 +252,7 @@
                 <data android:scheme="tblite" />
             </intent-filter>
 
-            <intent-filter android:autoVerify="true">
+            <intent-filter>
                 <data
                     android:host="unidispatch"
                     android:scheme="com.baidu.tieba" />
@@ -289,7 +286,7 @@
                 <data android:scheme="tblite" />
             </intent-filter>
 
-            <intent-filter android:autoVerify="true">
+            <intent-filter>
                 <data
                     android:host="unidispatch"
                     android:scheme="com.baidu.tieba" />

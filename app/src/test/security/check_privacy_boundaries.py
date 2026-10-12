@@ -61,6 +61,55 @@ class PrivacyBoundaryChecks(unittest.TestCase):
             for host in ('tieba.baidu.com', 'wappass.baidu.com', 'ufosdk.baidu.com', 'm.help.baidu.com'):
                 self.assertNotIn('host.contains("' + host + '")', source)
 
+    def test_no_phone_identifier_collection_or_permission(self):
+        source = (JAVA / 'utils/MobileInfoUtil.java').read_text()
+        self.assertIn('return DEFAULT_IMEI;', source)
+        self.assertNotIn('TelephonyManager', source)
+        self.assertNotIn('getDeviceId', source)
+        permissions = ET.parse(MAIN / 'AndroidManifest.xml').getroot().findall('uses-permission')
+        self.assertFalse(any('PHONE_STATE' in node.get(ANDROID + 'name', '') for node in permissions))
+
+    def test_custom_routes_remain_unverified_and_unchanged(self):
+        app = ET.parse(MAIN / 'AndroidManifest.xml').getroot().find('application')
+        routes = []
+        for component in app:
+            for intent in component.findall('intent-filter'):
+                for data in intent.findall('data'):
+                    if data.get(ANDROID + 'scheme') == 'com.baidu.tieba':
+                        self.assertEqual('unidispatch', data.get(ANDROID + 'host'))
+                        self.assertNotEqual('true', intent.get(ANDROID + 'autoVerify'))
+                        self.assertIn('android.intent.action.VIEW', [n.get(ANDROID + 'name') for n in intent.findall('action')])
+                        self.assertIn('android.intent.category.BROWSABLE', [n.get(ANDROID + 'name') for n in intent.findall('category')])
+                        routes.append(component.get(ANDROID + 'name'))
+        self.assertEqual(5, len(routes))
+
+    def test_back_handler_delegates_without_recursive_callback(self):
+        source = (JAVA / 'activities/BaseActivity.kt').read_text()
+        self.assertNotIn('override fun onBackPressed()', source)
+        self.assertIn('onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true)', source)
+        start = source.index('if (!HandleBackUtil.handleBackPress(this@BaseActivity))')
+        body = source[start:source.index('        if (isNeedFixBg)', start)]
+        self.assertLess(body.index('isEnabled = false'), body.index('onBackPressedDispatcher.onBackPressed()'))
+        self.assertIn('finally {', body)
+        self.assertGreater(body.index('isEnabled = true'), body.index('finally {'))
+
+    def test_theme_refresh_uses_public_apis_without_replacing_adapters(self):
+        source = (JAVA / 'ui/common/theme/utils/ThemeUtils.java').read_text()
+        for forbidden in ('getDeclaredField', 'getDeclaredMethod', 'setAccessible', 'setAdapter(', 'swapAdapter(', '@SuppressLint'):
+            self.assertNotIn(forbidden, source)
+        for expected in ('invalidateViews()', '((BaseAdapter) adapter).notifyDataSetChanged()',
+                         'recyclerView.getRecycledViewPool().clear()', 'adapter.notifyDataSetChanged()',
+                         'recyclerView.invalidateItemDecorations()', 'refreshView(((ViewGroup) view).getChildAt(i), extraRefreshable)'):
+            self.assertIn(expected, source)
+
+    def test_dynamic_palette_has_direct_platform_guard(self):
+        source = (JAVA / 'ui/common/theme/compose/Theme.kt').read_text()
+        branch = source[source.index('    val extendedColors = if ('):]
+        self.assertIn('Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&', branch)
+        self.assertIn('isDynamicTheme && !ThemeUtil.isTranslucentTheme(theme)', branch)
+        self.assertLess(branch.index('Build.VERSION.SDK_INT'), branch.index('dynamicTonalPalette(context)'))
+        self.assertIn('} else {\n        getThemeColorForTheme(theme)', branch)
+
     def test_emoticon_entry_points_validate_ids(self):
         source = (JAVA / 'utils/EmoticonManager.kt').read_text()
         self.assertIn('emoticonCache.ids.filter { EmoticonCachePath.isValidId(it) }', source)
