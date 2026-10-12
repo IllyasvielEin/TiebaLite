@@ -7,6 +7,19 @@ JAVA = Path(__file__).resolve().parents[2] / 'main/java/com/huanchengfly/tieba/p
 
 
 class ComposeCompatibilityChecks(unittest.TestCase):
+    def test_compose_resource_migration_preserves_context_imports(self):
+        # Resource-only context variables can go away while direct uses remain,
+        # such as a dataStore read or passing Context to a callback helper.
+        for path in JAVA.rglob('*.kt'):
+            source = path.read_text()
+            if 'LocalContext.current' in source:
+                with self.subTest(path=str(path.relative_to(JAVA))):
+                    self.assertTrue(
+                        'import androidx.compose.ui.platform.LocalContext' in source
+                        or 'import androidx.compose.ui.platform.*' in source,
+                        'LocalContext.current requires its platform import',
+                    )
+
     def test_default_link_settings_guards_api31_and_falls_back(self):
         source = (JAVA / 'ui/page/settings/more/MoreSettingsPage.kt').read_text()
         helper = source.split('private fun openDefaultLinkSettings', 1)[1]
