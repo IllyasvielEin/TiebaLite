@@ -158,6 +158,7 @@
         <item name="android:windowTranslucentNavigation">true</item>
         <item name="android:windowBackground">@color/transparent</item>
         <item name="android:statusBarColor">@color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item><!--控制刘海处显示信息-->
     </style>
 
     <style name="Base" />
@@ -176,27 +177,32 @@
         <item name="windowSplashScreenBackground">@color/colorSplashBg</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_screen_anim</item>
         <item name="windowSplashScreenAnimationDuration">1000</item>
+        <item name="android:windowSplashScreenBrandingImage">@drawable/ic_splash_text</item>
         <item name="postSplashScreenTheme">@style/Theme.NewAppTheme</item>
     </style>
 
     <style name="Base.AppTheme" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="android:forceDarkAllowed">false</item>
         <item name="windowActionModeOverlay">true</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowTranslucentStatus">false</item>
         <item name="android:windowTranslucentNavigation">false</item>
         <item name="android:windowBackground">@color/transparent</item>
+        <item name="android:windowLightNavigationBar">true</item>
         <item name="android:navigationBarColor">?colorNavBar</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 
     <style name="Base.AppTheme.Dark" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="android:forceDarkAllowed">false</item>
         <item name="windowActionModeOverlay">true</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowTranslucentStatus">false</item>
         <item name="android:windowTranslucentNavigation">false</item>
         <item name="android:windowBackground">@color/transparent</item>
+        <item name="android:windowLightNavigationBar">false</item>
         <item name="android:navigationBarColor">?colorNavBar</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>

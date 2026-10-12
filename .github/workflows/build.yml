@@ -73,6 +73,7 @@ jobs:
           python3 app/src/test/compatibility/check_compose_compatibility.py
           python3 app/src/test/compatibility/check_image_picker.py
           python3 app/src/test/compatibility/check_min_sdk35.py
+          python3 app/src/test/compatibility/check_resource_qualifier_equivalence.py
 
       - name: Record and verify resolved Wire runtime
         shell: bash

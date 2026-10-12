@@ -107,11 +107,7 @@
     <string name="tip_no_little_tail">你还没有设置小尾巴</string>
     <string name="button_next_time">下次再说</string>
     <string name="title_dialog_update">发现新版本 %1$s</string>
-    <string name="toast_no_permission_insert_photo">未授予「存储空间」权限，无法插入图片</string>
-    <string name="tip_permission_storage">用于保存、上传图片，更换头像。</string>
     <string name="tip_no_permission">权限未授予，部分功能可能无法使用</string>
-    <string name="toast_no_permission_save_photo">未授予「存储空间」权限，无法保存图片</string>
-    <string name="toast_no_permission_upload_portrait">未授予「存储空间」权限，无法上传头像</string>
     <string name="text_ip_location">来自%s</string>
     <string name="tip_post_floor">第 %d 楼</string>
     <string name="my_info_service_center">服务中心</string>
@@ -209,7 +205,6 @@
     <string name="summary_copy_bduss">请勿泄露，否则可能会导致您的账号被盗用</string>
 
     <string name="title_share_pic">分享图片</string>
-    <string name="tip_permission_storage_download">用于下载文件</string>
     <string name="title_show_both_username_and_nickname">同时显示用户名和昵称</string>
     <string name="title_dialog_clip_board_tieba_url">是否要打开剪贴板中的链接</string>
     <string name="subtitle_quick_preview_thread">来自%1$s吧，共 %2$s 条回复</string>
@@ -309,7 +304,6 @@
     <string name="title_post_or_reply_warning">发贴回贴风险提示</string>
     <string name="summary_ignore_battery_optimization">请忽略“电池优化”以允许应用启动自动签到</string>
     <string name="title_ignore_battery_optimization">忽略“电池优化”</string>
-    <string name="summary_battery_optimization_old_android_version">旧版 Android 无“电池优化”</string>
     <string name="summary_battery_optimization_ignored">“电池优化”已忽略</string>
     <string name="toast_ignore_battery_optimization_already">已忽略电池优化</string>
     <string name="button_redo">重做</string>
@@ -324,7 +318,6 @@
     <string name="common_permission_call_logs">通话记录</string>
     <string name="common_permission_body_sensors">身体传感器</string>
     <string name="common_permission_body_sensors_background">后台身体传感器</string>
-    <string name="common_permission_activity_recognition_api29">健身运动</string>
     <string name="common_permission_activity_recognition_api30">身体活动</string>
     <string name="common_permission_access_media_location">读取媒体文件位置</string>
     <string name="common_permission_sms">短信</string>

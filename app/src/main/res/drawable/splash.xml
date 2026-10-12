@@ -4,7 +4,24 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
         <shape android:shape="rectangle">
-            <solid android:color="@color/colorSplashBg" />
+            <gradient
+                android:angle="0"
+                android:endColor="@color/colorSplashBg"
+                android:startColor="@color/colorSplashBg"
+                android:type="linear" />
         </shape>
+    </item>
+    <item
+        android:width="120dp"
+        android:height="120dp"
+        android:gravity="center">
+        <bitmap android:src="@drawable/ic_splash" />
+    </item>
+    <item
+        android:width="200dp"
+        android:height="80dp"
+        android:bottom="35dp"
+        android:gravity="bottom|center_horizontal">
+        <bitmap android:src="@drawable/ic_splash_text" />
     </item>
 </layer-list>
