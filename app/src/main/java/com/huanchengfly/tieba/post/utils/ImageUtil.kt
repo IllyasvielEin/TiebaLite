@@ -39,7 +39,6 @@ import com.huanchengfly.tieba.post.dpToPxFloat
 import com.huanchengfly.tieba.post.utils.PermissionUtils.PermissionData
 import com.huanchengfly.tieba.post.utils.PermissionUtils.askPermission
 import com.huanchengfly.tieba.post.utils.ThemeUtil.isNightMode
-import com.zhihu.matisse.MimeType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -321,11 +320,11 @@ object ImageUtil {
         CoroutineScope(Dispatchers.IO).launch {
             val downloadResult = DownloadRequest(context, url).execute()
             if (downloadResult is DownloadResult.Success) {
-                var mimeType = MimeType.JPEG.toString()
+                var mimeType = "image/jpeg"
                 var fileName = URLUtil.guessFileName(url, null, mimeType)
                 downloadResult.data.data.newInputStream().use { inputStream ->
                     if (isGifFile(inputStream)) {
-                        mimeType = MimeType.GIF.toString()
+                        mimeType = "image/gif"
                         fileName = FileUtil.changeFileExtension(fileName, ".gif")
                     }
                 }
@@ -371,7 +370,7 @@ object ImageUtil {
         CoroutineScope(Dispatchers.IO).launch {
             val downloadResult = DownloadRequest(context, url).execute()
             if (downloadResult is DownloadResult.Success) {
-                var fileName = URLUtil.guessFileName(url, null, MimeType.JPEG.toString())
+                var fileName = URLUtil.guessFileName(url, null, "image/jpeg")
                 downloadResult.data.data.newInputStream().use { inputStream ->
                     if (isGifFile(inputStream)) {
                         fileName = FileUtil.changeFileExtension(fileName, ".gif")
@@ -424,7 +423,7 @@ object ImageUtil {
     }
 
     fun getPicId(picUrl: String?): String {
-        val fileName = URLUtil.guessFileName(picUrl, null, MimeType.JPEG.toString())
+        val fileName = URLUtil.guessFileName(picUrl, null, "image/jpeg")
         return fileName.replace(".jpg", "")
     }
 

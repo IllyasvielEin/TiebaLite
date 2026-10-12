@@ -12,7 +12,6 @@ import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.filled.TabletAndroid
 import androidx.compose.material.icons.outlined.AddModerator
 import androidx.compose.material.icons.outlined.CalendarViewDay
-import androidx.compose.material.icons.outlined.ImageSearch
 import androidx.compose.material.icons.outlined.NightsStay
 import androidx.compose.material.icons.outlined.PhotoSizeSelectActual
 import androidx.compose.material.icons.outlined.SecurityUpdateWarning
@@ -43,7 +42,6 @@ import com.huanchengfly.tieba.post.ui.widgets.compose.BackNavigationIcon
 import com.huanchengfly.tieba.post.ui.widgets.compose.MyScaffold
 import com.huanchengfly.tieba.post.ui.widgets.compose.Sizes
 import com.huanchengfly.tieba.post.ui.widgets.compose.TitleCentredToolbar
-import com.huanchengfly.tieba.post.utils.isPhotoPickerAvailable
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 
@@ -348,32 +346,6 @@ fun HabitSettingsPage(
                         }
                     }
                 }
-            }
-            prefsItem {
-                SwitchPref(
-                    key = "doNotUsePhotoPicker",
-                    title = stringResource(id = R.string.title_do_not_use_photo_picker),
-                    summary = {
-                        if (!isPhotoPickerAvailable()) {
-                            stringResource(R.string.summary_photo_picker_not_supported)
-                        } else if (it) {
-                            stringResource(R.string.summary_do_not_use_photo_picker)
-                        } else {
-                            stringResource(R.string.summary_use_photo_picker)
-                        }
-                    },
-                    defaultChecked = false,
-                    leadingIcon = {
-                        LeadingIcon {
-                            AvatarIcon(
-                                icon = Icons.Outlined.ImageSearch,
-                                size = Sizes.Small,
-                                contentDescription = null,
-                            )
-                        }
-                    },
-                    enabled = isPhotoPickerAvailable()
-                )
             }
         }
     }

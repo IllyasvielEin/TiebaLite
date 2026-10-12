@@ -6,13 +6,14 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
 import android.widget.SeekBar
 import android.widget.SeekBar.OnSeekBarChangeListener
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.ColorInt
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.content.ContextCompat
@@ -58,12 +59,18 @@ class TranslucentThemeActivity : BaseActivity<ActivityTranslucentThemeBinding>()
     private var blur = 0
     private var mPalette: Palette? = null
 
-    private val selectImageLauncher = registerPickMediasLauncher { (_, uris) ->
-        if (uris.isNotEmpty()) {
-            val sourceUri = uris[0]
-            launchUCrop(sourceUri)
+    private val selectImageLauncher =
+        registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            // Cancellation leaves the current background untouched. The URI is
+            // read immediately and copied to our own file before cropping.
+            if (uri != null) {
+                if (uri.isPickerContentUri()) {
+                    launchUCrop(uri)
+                } else {
+                    toastShort(R.string.text_load_failed)
+                }
+            }
         }
-    }
 
     var wallpapers: List<String>? = null
         set(value) {
@@ -131,12 +138,17 @@ class TranslucentThemeActivity : BaseActivity<ActivityTranslucentThemeBinding>()
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (resultCode == Activity.RESULT_OK && requestCode == UCrop.REQUEST_CROP) {
-            mUri = UCrop.getOutput(data!!)
-            invalidateFinishBtn()
-            refreshBackground()
-        } else if (resultCode == UCrop.RESULT_ERROR) {
-            val cropError = UCrop.getError(data!!)
-            cropError!!.printStackTrace()
+            val outputUri = data?.let(UCrop::getOutput)
+            if (outputUri != null) {
+                mUri = outputUri
+                invalidateFinishBtn()
+                refreshBackground()
+            } else {
+                toastShort(R.string.text_load_failed)
+            }
+        } else if (requestCode == UCrop.REQUEST_CROP && resultCode == UCrop.RESULT_ERROR) {
+            data?.let(UCrop::getError)?.printStackTrace()
+            toastShort(R.string.text_load_failed)
         }
     }
 
@@ -408,9 +420,9 @@ class TranslucentThemeActivity : BaseActivity<ActivityTranslucentThemeBinding>()
             R.id.button_back -> {
                 finish()
             }
-            R.id.select_pic -> askPermission {
-                selectImageLauncher.launch(PickMediasRequest(mediaType = PickMediasRequest.ImageOnly))
-            }
+            R.id.select_pic -> selectImageLauncher.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
             R.id.custom_color -> {
                 val primaryColorPicker = ColorPickerDialog.newBuilder()
                     .setDialogTitle(R.string.title_color_picker_primary)
@@ -434,31 +446,6 @@ class TranslucentThemeActivity : BaseActivity<ActivityTranslucentThemeBinding>()
                 appPreferences.translucentBackgroundTheme = TRANSLUCENT_THEME_LIGHT
                 refreshTheme()
             }
-        }
-    }
-
-    private fun askPermission(granted: () -> Unit) {
-        if (shouldUsePhotoPicker()) {
-            granted()
-            return
-        }
-        requestPermission {
-            unchecked = true
-            permissions = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                listOf(
-                    PermissionUtils.READ_EXTERNAL_STORAGE,
-                    PermissionUtils.WRITE_EXTERNAL_STORAGE
-                )
-            } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                listOf(
-                    PermissionUtils.READ_EXTERNAL_STORAGE
-                )
-            } else {
-                listOf(PermissionUtils.READ_MEDIA_IMAGES)
-            }
-            description = getString(R.string.tip_permission_storage)
-            onGranted = granted
-            onDenied = { toastShort(R.string.toast_no_permission_insert_photo) }
         }
     }
 

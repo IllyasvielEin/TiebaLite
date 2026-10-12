@@ -186,9 +186,6 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 # ColorPicker
 com-jaredrummler-colorpicker = { group = "com.jaredrummler", name = "colorpicker", version = "1.1.0" }
 
-# Matisse
-github-matisse = { group = "com.github.lwj1994", name = "Matisse", version = "0.5.3-20220115" }
-
 # XXPermissions
 xx-permissions = { group = "com.github.getActivity", name = "XXPermissions", version = "26.8" }
 

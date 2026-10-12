@@ -103,8 +103,6 @@ open class AppPreferencesUtils private constructor(ctx: Context) {
 
     var darkTheme by DataStoreDelegates.string(key = "dark_theme", defaultValue = "grey_dark")
 
-    var doNotUsePhotoPicker by DataStoreDelegates.boolean(defaultValue = false)
-
     var useDynamicColorTheme by DataStoreDelegates.boolean(defaultValue = false)
 
     var followSystemNight by DataStoreDelegates.boolean(

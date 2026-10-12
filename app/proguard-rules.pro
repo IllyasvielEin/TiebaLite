@@ -153,11 +153,6 @@
     *;
 }
 
-# Matisse
--dontwarn com.squareup.picasso.**
--dontwarn com.zhihu.matisse.**
--keep class com.zhihu.matisse.**{*;}
-
 -keep class com.lijiankun24.** { *; }
 
 # uCrop

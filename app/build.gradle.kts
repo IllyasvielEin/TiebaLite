@@ -268,7 +268,6 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.com.jaredrummler.colorpicker)
 
-    implementation(libs.github.matisse)
     implementation(libs.xx.permissions)
     implementation(libs.com.gyf.immersionbar.immersionbar)
 

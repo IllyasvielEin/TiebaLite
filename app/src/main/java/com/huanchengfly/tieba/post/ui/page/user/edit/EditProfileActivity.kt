@@ -4,11 +4,11 @@ import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.setContent
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
@@ -86,13 +86,9 @@ import com.huanchengfly.tieba.post.ui.widgets.compose.picker.ListSinglePicker
 import com.huanchengfly.tieba.post.ui.widgets.compose.rememberDialogState
 import com.huanchengfly.tieba.post.utils.AccountUtil
 import com.huanchengfly.tieba.post.utils.ColorUtils
-import com.huanchengfly.tieba.post.utils.PermissionUtils
-import com.huanchengfly.tieba.post.utils.PickMediasRequest
 import com.huanchengfly.tieba.post.utils.StringUtil
 import com.huanchengfly.tieba.post.utils.ThemeUtil
-import com.huanchengfly.tieba.post.utils.registerPickMediasLauncher
-import com.huanchengfly.tieba.post.utils.requestPermission
-import com.huanchengfly.tieba.post.utils.shouldUsePhotoPicker
+import com.huanchengfly.tieba.post.utils.isPickerContentUri
 import com.yalantis.ucrop.UCrop
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.collections.immutable.persistentListOf
@@ -108,22 +104,33 @@ class EditProfileActivity : BaseActivity<Nothing>() {
     private val uCropLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             if (it.resultCode == Activity.RESULT_OK) {
-                viewModel.send(EditProfileIntent.UploadPortrait(File(cacheDir, "cropped_portrait")))
+                if (it.data?.let(UCrop::getOutput) != null) {
+                    viewModel.send(EditProfileIntent.UploadPortrait(File(cacheDir, "cropped_portrait")))
+                } else {
+                    toastShort(R.string.text_load_failed)
+                }
             } else if (it.resultCode == UCrop.RESULT_ERROR) {
-                val cropError = UCrop.getError(it.data!!)
-                cropError!!.printStackTrace()
+                it.data?.let(UCrop::getError)?.printStackTrace()
+                toastShort(R.string.text_load_failed)
             }
         }
 
-    private val pickMediasLauncher =
-        registerPickMediasLauncher { (_, uris) ->
-            if (uris.isNotEmpty()) {
-                val sourceUri = uris[0]
+    private val pickImageLauncher =
+        registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { sourceUri ->
+            if (sourceUri != null) {
+                if (!sourceUri.isPickerContentUri()) {
+                    toastShort(R.string.text_load_failed)
+                    return@registerForActivityResult
+                }
                 Glide.with(this)
                     .asFile()
                     .load(sourceUri)
                     .into(object : CustomTarget<File>() {
                         override fun onLoadCleared(placeholder: Drawable?) {}
+
+                        override fun onLoadFailed(errorDrawable: Drawable?) {
+                            toastShort(R.string.text_load_failed)
+                        }
 
                         override fun onResourceReady(
                             resource: File,
@@ -168,7 +175,7 @@ class EditProfileActivity : BaseActivity<Nothing>() {
                         }
                     })
             }
-            }
+        }
 
     private val viewModel: EditProfileViewModel by viewModels()
 
@@ -231,31 +238,9 @@ class EditProfileActivity : BaseActivity<Nothing>() {
             }
 
             EditProfileEvent.UploadPortrait.Pick -> {
-                if (shouldUsePhotoPicker()) {
-                    pickMediasLauncher.launch(PickMediasRequest(mediaType = PickMediasRequest.ImageOnly))
-                } else {
-                    requestPermission {
-                        permissions = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                            listOf(
-                                PermissionUtils.READ_EXTERNAL_STORAGE,
-                                PermissionUtils.WRITE_EXTERNAL_STORAGE
-                            )
-                        } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                            listOf(
-                                PermissionUtils.READ_EXTERNAL_STORAGE
-                            )
-                        } else {
-                            listOf(PermissionUtils.READ_MEDIA_IMAGES)
-                        }
-                        description = context.getString(R.string.tip_permission_storage)
-                        onGranted = {
-                            pickMediasLauncher.launch(PickMediasRequest(mediaType = PickMediasRequest.ImageOnly))
-                        }
-                        onDenied = {
-                            toastShort(R.string.toast_no_permission_upload_portrait)
-                        }
-                    }
-                }
+                pickImageLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
             }
 
             is EditProfileEvent.UploadPortrait.Fail -> toastShort(event.error)
