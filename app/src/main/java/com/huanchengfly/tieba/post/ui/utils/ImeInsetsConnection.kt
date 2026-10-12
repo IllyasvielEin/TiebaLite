@@ -39,7 +39,6 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.util.packFloats
 import androidx.compose.ui.util.unpackFloat1
 import androidx.compose.ui.util.unpackFloat2
-import androidx.core.view.WindowInsetsCompat
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -159,7 +158,7 @@ private class ImeInsetsNestedScrollConnection(
         if (!isControllerRequested) {
             isControllerRequested = true
             view.windowInsetsController?.controlWindowInsetsAnimation(
-                WindowInsetsCompat.Type.ime(), // type
+                android.view.WindowInsets.Type.ime(), // platform controller requires platform type
                 -1, // durationMillis
                 null, // interpolator
                 cancellationSignal,

@@ -7,6 +7,12 @@ JAVA = Path(__file__).resolve().parents[2] / 'main/java/com/huanchengfly/tieba/p
 
 
 class ComposeCompatibilityChecks(unittest.TestCase):
+    def test_platform_ime_animation_uses_platform_inset_type(self):
+        source = (JAVA / 'ui/utils/ImeInsetsConnection.kt').read_text()
+        call = source.split('view.windowInsetsController?.controlWindowInsetsAnimation(', 1)[1].split(')', 1)[0]
+        self.assertIn('android.view.WindowInsets.Type.ime(', call)
+        self.assertNotIn('WindowInsetsCompat', source)
+
     def test_compose_resource_migration_preserves_context_imports(self):
         # Resource-only context variables can go away while direct uses remain,
         # such as a dataStore read or passing Context to a callback helper.
