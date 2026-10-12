@@ -60,6 +60,7 @@ import androidx.compose.ui.platform.debugInspectorInfo
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
@@ -144,9 +145,11 @@ fun TabRow(
     contentColor: Color = contentColorFor(backgroundColor),
     indicator: @Composable @UiComposable
         (tabPositions: List<TabPosition>) -> Unit = @Composable { tabPositions ->
-        TabRowDefaults.Indicator(
-            Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex])
-        )
+        tabPositions.getOrNull(selectedTabIndex)?.let { currentTabPosition ->
+            TabRowDefaults.Indicator(
+                Modifier.tabIndicatorOffset(currentTabPosition)
+            )
+        }
     },
     divider: @Composable @UiComposable () -> Unit =
         @Composable {
@@ -239,9 +242,11 @@ fun ScrollableTabRow(
     edgePadding: Dp = TabRowDefaults.ScrollableTabRowPadding,
     indicator: @Composable @UiComposable
         (tabPositions: List<TabPosition>) -> Unit = @Composable { tabPositions ->
-        TabRowDefaults.Indicator(
-            Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex])
-        )
+        tabPositions.getOrNull(selectedTabIndex)?.let { currentTabPosition ->
+            TabRowDefaults.Indicator(
+                Modifier.tabIndicatorOffset(currentTabPosition)
+            )
+        }
     },
     divider: @Composable @UiComposable () -> Unit =
         @Composable {
@@ -351,7 +356,7 @@ fun Modifier.tabIndicatorOffset(
     )
     fillMaxWidth()
         .wrapContentSize(Alignment.BottomStart)
-        .offset(x = indicatorOffset)
+        .offset { IntOffset(indicatorOffset.roundToPx(), 0) }
         .width(currentTabWidth)
 }
 
@@ -420,7 +425,7 @@ fun PagerTabIndicator(
             Modifier
                 .fillMaxWidth()
                 .wrapContentSize(Alignment.BottomStart)
-                .offset(x = animatedIndicatorOffset, y = (-8).dp)
+                .offset { IntOffset(animatedIndicatorOffset.roundToPx(), (-8).dp.roundToPx()) }
                 .width(16.dp)
                 .height(3.dp)
                 .clip(RoundedCornerShape(100))
@@ -436,14 +441,14 @@ fun TabIndicator(
 ) {
     if (tabPositions.isNotEmpty()) {
         val tabIndicatorWidth = 16.dp
-        val currentTab = tabPositions[selectedTabIndex]
+        val currentTab = tabPositions.getOrNull(selectedTabIndex) ?: return
         val currentTabLeft = currentTab.left + (currentTab.width / 2 - tabIndicatorWidth / 2)
         val animatedIndicatorOffset by animateDpAsState(targetValue = currentTabLeft)
         Box(
             Modifier
                 .fillMaxWidth()
                 .wrapContentSize(Alignment.BottomStart)
-                .offset(x = animatedIndicatorOffset, y = (-8).dp)
+                .offset { IntOffset(animatedIndicatorOffset.roundToPx(), (-8).dp.roundToPx()) }
                 .width(tabIndicatorWidth)
                 .height(3.dp)
                 .clip(RoundedCornerShape(100))

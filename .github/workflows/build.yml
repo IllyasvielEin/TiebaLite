@@ -67,6 +67,8 @@ jobs:
           python3 scripts/test_android_toolchain.py
           python3 scripts/test_android_sdk_setup.py
           python3 scripts/test_media_lifecycle.py
+          python3 scripts/test_ui_layout_warnings.py
+          python3 scripts/test_compose_tab_offsets.py
           python3 app/src/test/security/check_privacy_boundaries.py
           python3 app/src/test/security/check_publication_boundaries.py
           python3 app/src/test/security/check_protobuf_response_contracts.py
