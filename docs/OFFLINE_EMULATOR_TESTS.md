@@ -54,7 +54,7 @@ network firewall: SDK/Gradle setup needs network and the Google system image has
 system services. No production account, Tieba login, upload, post or account mutation is
 part of any test.
 
-## What the ten tests actually exercise
+## What the eleven tests actually exercise
 
 ### Real Android runtime and production media code
 
@@ -72,8 +72,10 @@ eight-second silence, with no external downloads or personal media.
    the same raw resource.
 5. A saved state belonging to source A is rejected when the reconstructed composition
    requests source B.
+6. A separate direct foreground=false check isolates the controller command guards; it
+   supplements, rather than replaces, the actual Activity lifecycle test.
 
-The last two use AndroidX `StateRestorationTester`: they exercise Compose saved-state
+Cases 4 and 5 use AndroidX `StateRestorationTester`: they exercise Compose saved-state
 restoration, **not full OS process death or all Activity/ViewModel recreation behavior**.
 The local media is audio in the video controller; codec-specific video rendering,
 fullscreen animation, DRM, network headers and physical-device decoder behavior are
@@ -112,7 +114,7 @@ injected registry results. It does not mock the system picker and does not selec
 
 Each UI wait is bounded. AndroidJUnitRunner has a 45-second per-test limit, instrumentation
 has a ten-minute hard limit, emulator boot and workflow steps also have deadlines. The
-result verifier requires all ten cases in the four expected classes, with no skips,
+result verifier requires all eleven cases in the four expected classes, with no skips,
 failures, empty run or crashed runner accepted as success.
 
 ## SDK and runner requirements

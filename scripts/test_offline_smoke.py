@@ -187,11 +187,11 @@ class OfflineSmokeGuards(unittest.TestCase):
                 lines.extend([f"INSTRUMENTATION_STATUS: class=com.test.{cls}",
                               f"INSTRUMENTATION_STATUS: test=case{index}",
                               "INSTRUMENTATION_STATUS_CODE: 0"])
-        return "\n".join(lines + ["OK (10 tests)", "INSTRUMENTATION_CODE: -1"])
+        return "\n".join(lines + ["OK (11 tests)", "INSTRUMENTATION_CODE: -1"])
 
     def test_all_expected_cases_are_required(self):
-        self.assertEqual(10, verify_results(self.result())["test_count"])
-        for source in ("", self.result().replace("OK (10 tests)", "OK (9 tests)"),
+        self.assertEqual(11, verify_results(self.result())["test_count"])
+        for source in ("", self.result().replace("OK (11 tests)", "OK (10 tests)"),
                        self.result().replace("STATUS_CODE: 0", "STATUS_CODE: -3", 1),
                        self.result().replace("CODE: -1", "CODE: 0")):
             with self.assertRaises(ValueError):
@@ -235,7 +235,7 @@ class OfflineSmokeGuards(unittest.TestCase):
         self.assertNotIn("chmod", source)
         self.assertNotIn("sudo", source)
         self.assertNotIn("pull_request", source)
-        self.assertLess(source.index("verify_offline_apks.py"), source.index('install -t'))
+        self.assertLess(source.index("verify_offline_apks.py"), source.index('install_offline_apks.py'))
         self.assertNotIn("connectedSmokeAndroidTest", source)  # No rebuild after APK verification.
 
 

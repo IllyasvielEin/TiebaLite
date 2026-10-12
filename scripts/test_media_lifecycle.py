@@ -9,6 +9,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 JAVA = ROOT / 'app/src/main/java/com/huanchengfly/tieba/post'
 VIDEO = JAVA / 'ui/widgets/compose/video'
+SMOKE_MEDIA = ROOT / 'app/src/androidTestSmoke/java/com/huanchengfly/tieba/post/smoke/MediaControllerSmokeTest.kt'
 
 
 class MediaWiringTest(unittest.TestCase):
@@ -106,6 +107,73 @@ class MediaWiringTest(unittest.TestCase):
         for source in (base, voice, video):
             self.assertNotIn('Build.VERSION.SDK_INT', source)
             self.assertNotIn('import android.os.Build', source)
+
+
+class MediaSmokeDiagnosticsSourceTest(unittest.TestCase):
+    def test_activity_transition_still_checks_exact_stopped_owners_without_idling(self):
+        source = SMOKE_MEDIA.read_text()
+        stopped = source.split('@Test fun stoppingActivityPausesAndRejectsBackgroundPlaybackUntilResumed()', 1)[1]
+        stopped = stopped.split('@Test fun explicitForegroundFalsePausesAndRejectsCommandsUntilReenabled()', 1)[0]
+        boundary = stopped.split('scenario.moveToState(Lifecycle.State.CREATED)', 1)[1]
+        boundary = boundary.split('scenario.moveToState(Lifecycle.State.RESUMED)', 1)[0]
+        self.assertIn('scenario.onActivity { activity ->', boundary)
+        self.assertIn('assertPausedAndCommandsRejected(activity, Lifecycle.State.CREATED,', boundary)
+        self.assertIn('Lifecycle.Event.ON_STOP in activityEvents', boundary)
+        self.assertIn('Lifecycle.Event.ON_STOP in composeOwnerEvents', boundary)
+        self.assertNotIn('compose.runOnIdle', boundary)
+        self.assertNotIn('waitUntil', boundary)
+        self.assertNotIn('SystemClock.sleep', boundary)
+        self.assertNotIn('setForeground(false)', stopped)
+        self.assertIn('val lifecycleOwner = LocalLifecycleOwner.current', source)
+        self.assertIn('DisposableEffect(lifecycleOwner)', source)
+        self.assertIn('LifecycleEventObserver { _, event -> composeOwnerEvents.add(event) }', source)
+        self.assertIn('onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }', source)
+        for capture in ('previousController = controller', 'previousPlayer = checkNotNull(surface.player)',
+                        'previousOwner = composeOwner'):
+            self.assertLess(stopped.index(capture), stopped.index('scenario.moveToState(Lifecycle.State.CREATED)'))
+
+    def test_each_rejected_command_checks_actual_cached_identity_and_position_immediately(self):
+        source = SMOKE_MEDIA.read_text()
+        helper = source.split('private fun assertPausedAndCommandsRejected(', 1)[1].split('@Test fun', 1)[0]
+        for expected in (
+            'assertEquals(evidence, expectedLifecycle, activity.lifecycle.currentState)',
+            'assertEquals(evidence, expectedLifecycle, composeOwner.lifecycle.currentState)',
+            'assertSame(evidence, expectedOwner, composeOwner)',
+            'assertSame(evidence, expectedController, controller)',
+            'assertSame(evidence, expectedPlayer, surface.player)',
+            'assertFalse(evidence, expectedPlayer.playWhenReady)',
+            'assertFalse(evidence, expectedPlayer.isPlaying)',
+            'assertFalse(evidence, controller.state.value.isPlaying)',
+            'assertEquals(evidence, position, controller.state.value.currentPosition)',
+            'assertEquals(evidence, playerPosition, expectedPlayer.currentPosition)',
+            'assertSame(evidence, quickSeekAction, controller.state.value.quickSeekAction)',
+            'assertEquals(evidence, quickSeekDirection, controller.state.value.quickSeekAction.direction)',
+            'assertSame(Looper.getMainLooper(), Looper.myLooper())',
+        ):
+            self.assertIn(expected, helper)
+        for command in ('controller.play()', 'controller.seekTo(6_000)',
+                        'controller.quickSeekForward()', 'controller.quickSeekRewind()'):
+            self.assertIn(command, helper)
+        self.assertIn('assertUnchanged("before-$name")\n            command()\n            assertUnchanged("after-$name")', helper)
+        self.assertIn('activityEvents.takeLast(24)', helper)
+        self.assertIn('composeOwnerEvents.takeLast(24)', helper)
+        self.assertIn('trace.joinToString("; ").takeLast(2700)', helper)
+        self.assertNotIn('waitUntil', helper)
+        self.assertNotIn('runOnIdle', helper)
+        self.assertNotIn('SystemClock.sleep', helper)
+
+    def test_explicit_foreground_guard_is_separate_from_activity_transition_case(self):
+        source = SMOKE_MEDIA.read_text()
+        direct = source.split('@Test fun explicitForegroundFalsePausesAndRejectsCommandsUntilReenabled()', 1)[1]
+        direct = direct.split('@Test fun', 1)[0]
+        self.assertIn('controller.setForeground(false)', direct)
+        self.assertIn('assertPausedAndCommandsRejected(activity, Lifecycle.State.RESUMED,', direct)
+        self.assertIn('controller.setForeground(true)', direct)
+        self.assertNotIn('scenario.moveToState', direct)
+        self.assertLess(direct.index('controller.setForeground(false)'), direct.index('assertPausedAndCommandsRejected'))
+        self.assertLess(direct.index('assertPausedAndCommandsRejected'), direct.index('controller.setForeground(true)'))
+        for guard in ('controller.state.value.isPlaying', 'previousPlayer.playWhenReady', 'previousPlayer.isPlaying'):
+            self.assertIn(guard, direct.split('controller.setForeground(true)', 1)[1])
 
 
 

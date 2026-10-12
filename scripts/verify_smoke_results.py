@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 EXPECTED = {
-    "MediaControllerSmokeTest": 5,
+    "MediaControllerSmokeTest": 6,
     "VoiceOwnershipSmokeTest": 1,
     "PickerContractSmokeTest": 3,
     "SystemPickerSmokeTest": 1,
@@ -16,8 +16,8 @@ EXPECTED = {
 def verify_results(text):
     if not re.search(r"^INSTRUMENTATION_CODE: -1\s*$", text, re.M):
         raise ValueError("Instrumentation did not finish successfully")
-    if not re.search(r"\bOK \(10 tests\)", text):
-        raise ValueError("Expected all ten smoke tests")
+    if not re.search(r"\bOK \(11 tests\)", text):
+        raise ValueError("Expected all eleven smoke tests")
     observed = {}
     completed = []
     status = {}
@@ -54,7 +54,7 @@ def main():
     args = parser.parse_args()
     result = verify_results(args.input.read_text())
     args.output.write_text(json.dumps(result, indent=2) + "\n")
-    print("All ten offline smoke tests passed.")
+    print("All eleven offline smoke tests passed.")
 
 
 if __name__ == "__main__":

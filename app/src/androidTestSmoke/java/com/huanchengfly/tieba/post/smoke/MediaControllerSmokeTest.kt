@@ -1,9 +1,14 @@
 package com.huanchengfly.tieba.post.smoke
 
+import android.os.Looper
 import android.os.SystemClock
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import com.huanchengfly.tieba.post.R
@@ -21,6 +26,9 @@ class MediaControllerSmokeTest {
     @get:Rule val compose = createAndroidComposeRule<SmokeActivity>()
     private lateinit var controller: DefaultVideoPlayerController
     private lateinit var surface: PlayerView
+    private lateinit var composeOwner: LifecycleOwner
+    private val composeOwnerEvents = mutableListOf<Lifecycle.Event>()
+    private val activityEvents = mutableListOf<Lifecycle.Event>()
 
     private fun install(restoration: StateRestorationTester? = null, source: () -> VideoPlayerSource = {
         VideoPlayerSource.Raw(R.raw.smoke_silence_a)
@@ -28,6 +36,13 @@ class MediaControllerSmokeTest {
         val content: @androidx.compose.runtime.Composable () -> Unit = {
             val current = rememberVideoPlayerController(source()) as DefaultVideoPlayerController
             controller = current
+            val lifecycleOwner = LocalLifecycleOwner.current
+            composeOwner = lifecycleOwner
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event -> composeOwnerEvents.add(event) }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
             PlayerSurface(onPlayerViewReleased = current::playerViewReleased) {
                 surface = it
                 current.playerViewAvailable(it)
@@ -71,6 +86,68 @@ class MediaControllerSmokeTest {
     private fun awaitPlaying() = compose.waitUntil(10_000) {
         compose.runOnUiThread {
             controller.state.value.isPlaying && surface.player?.isPlaying == true
+        }
+    }
+
+    private fun observeActivityLifecycle(): LifecycleEventObserver {
+        val observer = LifecycleEventObserver { _, event -> activityEvents.add(event) }
+        compose.activityRule.scenario.onActivity { it.lifecycle.addObserver(observer) }
+        return observer
+    }
+
+    /** UI-thread assertions only: no idling/wait can advance lifecycle or conceal a rejection. */
+    private fun assertPausedAndCommandsRejected(
+        activity: SmokeActivity,
+        expectedLifecycle: Lifecycle.State,
+        expectedController: DefaultVideoPlayerController,
+        expectedPlayer: Player,
+        expectedOwner: LifecycleOwner,
+        boundary: String
+    ) {
+        assertSame(Looper.getMainLooper(), Looper.myLooper())
+        val position = expectedController.state.value.currentPosition
+        val playerPosition = expectedPlayer.currentPosition
+        val quickSeekAction = expectedController.state.value.quickSeekAction
+        val quickSeekDirection = quickSeekAction.direction
+        val trace = mutableListOf<String>()
+        fun assertUnchanged(command: String) {
+            trace.add("$boundary/$command activity=${activity.lifecycle.currentState} " +
+                "owner=${composeOwner.lifecycle.currentState} " +
+                "ownerType=${composeOwner.javaClass.name} ownerId=${System.identityHashCode(composeOwner)} " +
+                "controller=${System.identityHashCode(controller)} " +
+                "player=${System.identityHashCode(surface.player)} " +
+                "playWhenReady=${expectedPlayer.playWhenReady} isPlaying=${expectedPlayer.isPlaying} " +
+                "cachedPlaying=${controller.state.value.isPlaying} " +
+                "playerPosition=${expectedPlayer.currentPosition} cachedPosition=${controller.state.value.currentPosition} " +
+                "quickSeek=${System.identityHashCode(controller.state.value.quickSeekAction)} " +
+                "direction=${controller.state.value.quickSeekAction.direction}")
+            val evidence = "activityEvents=${activityEvents.takeLast(24)} " +
+                "ownerEvents=${composeOwnerEvents.takeLast(24)} " + trace.joinToString("; ").takeLast(2700)
+            assertEquals(evidence, expectedLifecycle, activity.lifecycle.currentState)
+            assertEquals(evidence, expectedLifecycle, composeOwner.lifecycle.currentState)
+            assertSame(evidence, expectedOwner, composeOwner)
+            assertSame(evidence, expectedController, controller)
+            assertSame(evidence, expectedPlayer, surface.player)
+            assertFalse(evidence, expectedPlayer.playWhenReady)
+            assertFalse(evidence, expectedPlayer.isPlaying)
+            assertFalse(evidence, controller.state.value.isPlaying)
+            assertEquals(evidence, position, controller.state.value.currentPosition)
+            assertEquals(evidence, playerPosition, expectedPlayer.currentPosition)
+            // QuickSeekAction.equals is deliberately non-reflexive. Preserve the instance
+            // and separately captured direction; ordinary object equality is unsuitable.
+            assertSame(evidence, quickSeekAction, controller.state.value.quickSeekAction)
+            assertEquals(evidence, quickSeekDirection, controller.state.value.quickSeekAction.direction)
+        }
+        assertUnchanged("paused")
+        for ((name, command) in listOf<Pair<String, () -> Unit>>(
+            "play" to { controller.play() },
+            "seekTo(6000)" to { controller.seekTo(6_000) },
+            "quickSeekForward" to { controller.quickSeekForward() },
+            "quickSeekRewind" to { controller.quickSeekRewind() }
+        )) {
+            assertUnchanged("before-$name")
+            command()
+            assertUnchanged("after-$name")
         }
     }
 
@@ -127,37 +204,73 @@ class MediaControllerSmokeTest {
 
     @Test fun stoppingActivityPausesAndRejectsBackgroundPlaybackUntilResumed() {
         install()
+        val observer = observeActivityLifecycle()
+        lateinit var previousController: DefaultVideoPlayerController
+        lateinit var previousPlayer: Player
+        lateinit var previousOwner: LifecycleOwner
         compose.runOnIdle { controller.play() }
         awaitPlaying()
-        compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
-        compose.runOnIdle {
-            assertFalse(controller.state.value.isPlaying)
-            val player = checkNotNull(surface.player)
-            assertFalse(player.playWhenReady)
-            assertFalse(player.isPlaying)
-            val position = controller.state.value.currentPosition
-            val playerPosition = player.currentPosition
-            val quickSeekAction = controller.state.value.quickSeekAction
-            controller.play()
-            controller.seekTo(6_000)
-            controller.quickSeekForward()
-            controller.quickSeekRewind()
-            assertFalse(controller.state.value.isPlaying)
-            assertEquals(position, controller.state.value.currentPosition)
-            assertEquals(playerPosition, player.currentPosition)
-            // Legacy QuickSeekAction.equals deliberately treats every action as unique, even
-            // itself. A rejected gesture must preserve this exact instance AND its direction.
-            assertSame(quickSeekAction, controller.state.value.quickSeekAction)
-            assertEquals(quickSeekAction.direction, controller.state.value.quickSeekAction.direction)
+        compose.activityRule.scenario.onActivity {
+            previousController = controller
+            previousPlayer = checkNotNull(surface.player)
+            previousOwner = composeOwner
         }
-        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
-        compose.runOnIdle {
-            assertFalse("Foreground return must not auto-resume", controller.state.value.isPlaying)
-            assertFalse(checkNotNull(surface.player).playWhenReady)
-            controller.play()
+        try {
+            compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+            // Do not use runOnIdle after STOP: diagnose the actual Activity/Compose owner
+            // boundary before any test idling could alter lifecycle dispatch.
+            compose.activityRule.scenario.onActivity { activity ->
+                val events = "activityEvents=$activityEvents ownerEvents=$composeOwnerEvents"
+                assertPausedAndCommandsRejected(activity, Lifecycle.State.CREATED,
+                    previousController, previousPlayer, previousOwner, "activity-stop")
+                assertTrue(events, Lifecycle.Event.ON_STOP in activityEvents)
+                assertTrue(events, Lifecycle.Event.ON_STOP in composeOwnerEvents)
+            }
+            compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+            compose.activityRule.scenario.onActivity { activity ->
+                assertEquals(Lifecycle.State.RESUMED, activity.lifecycle.currentState)
+                assertEquals(Lifecycle.State.RESUMED, composeOwner.lifecycle.currentState)
+                assertSame(previousOwner, composeOwner)
+                assertSame(previousController, controller)
+                assertSame(previousPlayer, surface.player)
+                assertFalse("Foreground return must not auto-resume", controller.state.value.isPlaying)
+                assertFalse(previousPlayer.playWhenReady)
+                assertFalse(previousPlayer.isPlaying)
+                controller.play()
+            }
+            awaitPlaying()
+            compose.runOnUiThread { controller.pause() }
+        } finally {
+            compose.activityRule.scenario.onActivity { it.lifecycle.removeObserver(observer) }
         }
+    }
+
+    @Test fun explicitForegroundFalsePausesAndRejectsCommandsUntilReenabled() {
+        install()
+        val observer = observeActivityLifecycle()
+        compose.runOnIdle { controller.play() }
         awaitPlaying()
-        compose.runOnIdle { controller.pause() }
+        try {
+            compose.activityRule.scenario.onActivity { activity ->
+                val previousController = controller
+                val previousPlayer = checkNotNull(surface.player)
+                val previousOwner = composeOwner
+                controller.setForeground(false)
+                assertPausedAndCommandsRejected(activity, Lifecycle.State.RESUMED,
+                    previousController, previousPlayer, previousOwner, "explicit-background")
+                controller.setForeground(true)
+                assertSame(previousController, controller)
+                assertSame(previousPlayer, surface.player)
+                assertFalse("Re-enabling foreground must not auto-resume", controller.state.value.isPlaying)
+                assertFalse(previousPlayer.playWhenReady)
+                assertFalse(previousPlayer.isPlaying)
+                controller.play()
+            }
+            awaitPlaying()
+            compose.runOnUiThread { controller.pause() }
+        } finally {
+            compose.activityRule.scenario.onActivity { it.lifecycle.removeObserver(observer) }
+        }
     }
 
     @Test fun composeSavedStateRestoresPositionForSameSource() {
