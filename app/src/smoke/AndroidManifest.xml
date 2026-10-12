@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Merge-time removal is also checked on BOTH packaged APKs before installation. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission-sdk-23 android:name="android.permission.INTERNET" tools:node="remove" />
+    <queries>
+        <intent>
+            <action android:name="android.provider.action.PICK_IMAGES" />
+            <data android:mimeType="image/*" />
+        </intent>
+    </queries>
+    <application
+        android:name="android.app.Application"
+        android:allowBackup="false"
+        tools:replace="android:name,android:allowBackup">
+        <!-- No production entry points, startup initializers, jobs or account receivers. -->
+        <activity tools:node="removeAll" />
+        <activity-alias tools:node="removeAll" />
+        <provider tools:node="removeAll" />
+        <receiver tools:node="removeAll" />
+        <service tools:node="removeAll" />
+        <activity
+            android:name="com.huanchengfly.tieba.post.smoke.SmokeActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.smoke-fixtures"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/smoke_fixture_paths" />
+        </provider>
+    </application>
+</manifest>

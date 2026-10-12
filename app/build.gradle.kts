@@ -26,6 +26,7 @@ plugins {
 }
 
 // Opt-in isolated emulator fixtures; ordinary debug/release configuration stays unchanged.
+val offlineSmoke = providers.gradleProperty("offlineSmoke").orNull == "true"
 
 val sha: String? = System.getenv("GITHUB_SHA")
 val isCI: String? = System.getenv("CI")
@@ -110,6 +111,15 @@ android {
             // Never silently sign a release with the disposable Android debug key.
             signingConfig = signingConfigs.findByName("config")
         }
+    }
+    if (offlineSmoke) {
+        buildTypes.create("smoke") {
+            initWith(buildTypes.getByName("debug"))
+            matchingFallbacks += "debug"
+            // Android's disposable debug key, generated in the fresh runner's temporary home.
+            signingConfig = signingConfigs.getByName("debug")
+        }
+        testBuildType = "smoke"
     }
     compileOptions {
         targetCompatibility = JavaVersion.VERSION_17
@@ -252,6 +262,10 @@ dependencies {
     androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestRuntimeOnly(libs.androidx.test.runner)
 
+    if (offlineSmoke) {
+        // Only the explicitly selected smoke instrumentation uses cross-app UI automation.
+        androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
+    }
 
     //Glide
     implementation(libs.glide.core)

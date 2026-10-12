@@ -1,0 +1,216 @@
+name: Offline Android emulator smoke tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: offline-emulator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/4.0-dev' &&
+          github.event.repository.default_branch == '4.0-dev' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - api: 37
+            image: system-images;android-37.0;google_apis;x86_64
+            image_dir: android-37.0/google_apis/x86_64
+          - api: 35
+            image: system-images;android-35;google_apis;x86_64
+            image_dir: android-35/google_apis/x86_64
+    env:
+      CI: 'true'
+      ANDROID_SERIAL: emulator-5554
+      ANDROID_USER_HOME: ${{ runner.temp }}/offline-android
+      ANDROID_EMULATOR_HOME: ${{ runner.temp }}/offline-android
+      ANDROID_AVD_HOME: ${{ runner.temp }}/offline-avd
+      SMOKE_IMAGE: ${{ matrix.image }}
+      SMOKE_IMAGE_DIR: ${{ matrix.image_dir }}
+      SMOKE_API: ${{ matrix.api }}
+    steps:
+      - name: Check out trusted source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Require existing KVM access
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/smoke-reports
+          if ! test -c /dev/kvm || ! test -r /dev/kvm || ! test -w /dev/kvm; then
+            echo 'Standard runner has no existing usable /dev/kvm access. No host security settings were changed.' | tee out/smoke-reports/kvm-blocker.txt
+            exit 1
+          fi
+          test ! -e keystore.properties
+          mkdir -p "$ANDROID_USER_HOME" "$ANDROID_AVD_HOME"
+          test ! -e "$ANDROID_USER_HOME/debug.keystore"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '17.0.20+8'
+
+      - name: Install only approved official SDK packages
+        timeout-minutes: 15
+        run: python3 scripts/ensure_android_sdk.py emulator${{ matrix.api }}
+
+      - name: Verify emulator compatibility and record exact installed versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, xml.etree.ElementTree as ET
+          from pathlib import Path
+          sdk = Path(os.environ['ANDROID_HOME'])
+          records = []
+          for name, directory in [('emulator', sdk / 'emulator'),
+                                  (os.environ['SMOKE_IMAGE'], sdk / 'system-images' / os.environ['SMOKE_IMAGE_DIR'])]:
+              root = ET.parse(directory / 'package.xml').getroot()
+              local = next(e for e in root.iter() if e.tag.rsplit('}', 1)[-1] == 'localPackage')
+              if local.attrib['path'] != name:
+                  raise SystemExit('Unexpected installed SDK package identity')
+              rev = next(e for e in local if e.tag.rsplit('}', 1)[-1] == 'revision')
+              parts = {e.tag.rsplit('}', 1)[-1]: int(e.text) for e in rev}
+              version = tuple(parts.get(k, 0) for k in ('major', 'minor', 'micro'))
+              if name == 'emulator' and version < (37, 1, 11):
+                  raise SystemExit('API37 graphics support requires emulator37.1.11 or newer')
+              records.append({'package': name, 'revision': '.'.join(map(str, version))})
+          Path('out/smoke-reports/sdk-versions.json').write_text(json.dumps(records, indent=2) + '\n')
+          PY
+          "$ANDROID_HOME/emulator/emulator" -accel-check | tee out/smoke-reports/acceleration.txt
+          "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" list device > "$RUNNER_TEMP/offline-device-inventory.txt"
+          if ! grep -E 'id: [0-9]+ or "pixel_7"' "$RUNNER_TEMP/offline-device-inventory.txt" > out/smoke-reports/device-profile.txt; then
+            echo '::error::Official AVD manager does not offer the required pixel_7 profile'
+            exit 1
+          fi
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
+
+      - name: Validate wrapper and use read-only Gradle cache
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        with:
+          validate-wrappers: true
+          cache-read-only: true
+
+      - name: Check offline guards and build isolated target and test APKs
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/test_offline_smoke.py
+          python3 app/src/test/compatibility/check_image_picker.py
+          ./gradlew --no-daemon --console=plain --stacktrace -PofflineSmoke=true :app:assembleSmoke :app:assembleSmokeAndroidTest
+
+      - name: Verify BOTH actual APKs are offline before any installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t target_apks < <(find app/build/outputs/apk/smoke -maxdepth 1 -name '*.apk' -type f)
+          mapfile -t test_apks < <(find app/build/outputs/apk/androidTest/smoke -maxdepth 1 -name '*.apk' -type f)
+          test "${#target_apks[@]}" -eq 1
+          test "${#test_apks[@]}" -eq 1
+          mkdir -p "$RUNNER_TEMP/offline-apks"
+          cp "${target_apks[0]}" "$RUNNER_TEMP/offline-apks/target.apk"
+          cp "${test_apks[0]}" "$RUNNER_TEMP/offline-apks/test.apk"
+          python3 scripts/verify_offline_apks.py \
+            --aapt2 "$ANDROID_HOME/build-tools/36.0.0/aapt2" \
+            --target "$RUNNER_TEMP/offline-apks/target.apk" \
+            --test "$RUNNER_TEMP/offline-apks/test.apk" \
+            --reports out/smoke-reports
+          for role in target test; do
+            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$RUNNER_TEMP/offline-apks/$role.apk" > "$RUNNER_TEMP/$role-certificate.txt"
+            grep -F 'CN=Android Debug' "$RUNNER_TEMP/$role-certificate.txt" > /dev/null
+          done
+          test -f "$ANDROID_USER_HOME/debug.keystore"
+          (cd "$RUNNER_TEMP/offline-apks" && sha256sum target.apk test.apk > SHA256SUMS)
+
+      - name: Start fresh official emulator
+        timeout-minutes: 8
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+            --name offline-smoke --package "$SMOKE_IMAGE" --device pixel_7 --force
+          "$ANDROID_HOME/emulator/emulator" -avd offline-smoke -port 5554 \
+            -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data \
+            -gpu software -accel on -cores 2 -memory 4096 \
+            -camera-back none -camera-front none > "$RUNNER_TEMP/offline-emulator.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/offline-emulator.pid"
+          timeout 240 "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" wait-for-device
+          deadline=$((SECONDS + 180))
+          while test "$(timeout 10 "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" shell getprop sys.boot_completed | tr -d '\r')" != 1; do
+            if test "$SECONDS" -ge "$deadline"; then
+              echo '::error::Emulator boot deadline exceeded'
+              exit 1
+            fi
+            kill -0 "$(cat "$RUNNER_TEMP/offline-emulator.pid")"
+            sleep 3
+          done
+          actual_api=$("$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" shell getprop ro.build.version.sdk | tr -d '\r')
+          test "$actual_api" = "$SMOKE_API"
+          "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" shell input keyevent 82
+          printf 'API=%s\nIMAGE=%s\n' "$actual_api" "$SMOKE_IMAGE" > out/smoke-reports/device.txt
+
+      - name: Install verified APKs and run all ten bounded smoke cases
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          adb="$ANDROID_HOME/platform-tools/adb"
+          (cd "$RUNNER_TEMP/offline-apks" && sha256sum -c SHA256SUMS)
+          "$adb" -s "$ANDROID_SERIAL" install -t "$RUNNER_TEMP/offline-apks/target.apk"
+          "$adb" -s "$ANDROID_SERIAL" install -t "$RUNNER_TEMP/offline-apks/test.apk"
+          timeout --signal=TERM 10m "$adb" -s "$ANDROID_SERIAL" shell am instrument -w -r \
+            -e package com.huanchengfly.tieba.post.smoke -e timeout_msec 45000 \
+            io.github.illyasvielein.tiebalite.test/androidx.test.runner.AndroidJUnitRunner \
+            | tee out/smoke-reports/instrumentation.txt
+          python3 scripts/verify_smoke_results.py out/smoke-reports/instrumentation.txt out/smoke-reports/summary.json
+
+      - name: Stop emulator and remove disposable state and debug key
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          if test -f "$RUNNER_TEMP/offline-emulator.pid"; then
+            timeout 10 "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" emu kill || true
+            kill "$(cat "$RUNNER_TEMP/offline-emulator.pid")" 2>/dev/null || true
+          fi
+          rm -rf -- "$ANDROID_AVD_HOME" "$ANDROID_USER_HOME" "$RUNNER_TEMP/offline-apks"
+          rm -f -- "$RUNNER_TEMP/target-certificate.txt" "$RUNNER_TEMP/test-certificate.txt"
+
+      - name: Keep only small allowlisted reports
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('out/smoke-reports')
+          root.mkdir(parents=True, exist_ok=True)
+          allowed = {'sdk-versions.json', 'acceleration.txt', 'device.txt', 'apk-verification.json',
+                     'summary.json', 'instrumentation.txt', 'kvm-blocker.txt', 'device-profile.txt'}
+          allowed.update(f'{role}-{kind}.txt' for role in ('target', 'test')
+                         for kind in ('permissions', 'badging', 'manifest'))
+          for file in root.iterdir():
+              if file.is_file() and (file.name not in allowed or file.stat().st_size > 2 * 1024 * 1024):
+                  file.unlink()
+          # No logcat, screenshots, credentials, raw emulator logs, APKs or AVD/userdata dumps.
+          PY
+
+      - name: Upload limited smoke reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: offline-smoke-api${{ matrix.api }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: out/smoke-reports/
+          if-no-files-found: warn
+          retention-days: 3
