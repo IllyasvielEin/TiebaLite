@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.Lifecycle
+import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import com.huanchengfly.tieba.post.R
 import com.huanchengfly.tieba.post.ui.widgets.compose.video.DefaultVideoPlayerController
@@ -37,23 +38,60 @@ class MediaControllerSmokeTest {
     }
 
     private fun ready() = compose.waitUntil(15_000) {
-        ::controller.isInitialized && controller.state.value.playbackState == PlaybackState.READY &&
-            controller.state.value.duration >= 7_000
+        compose.runOnUiThread {
+            ::controller.isInitialized && ::surface.isInitialized &&
+                surface.player?.playbackState == Player.STATE_READY &&
+                controller.state.value.playbackState == PlaybackState.READY &&
+                controller.state.value.duration >= 7_000
+        }
+    }
+
+    private fun awaitPosition(expected: Long, player: () -> Player? = { surface.player }) {
+        val range = (expected - 100)..(expected + 100)
+        // A seek can synchronously enter BUFFERING. Let real Media3 settle and publish READY
+        // instead of asserting the controller's cached position in the same seekTo call stack.
+        compose.waitUntil(15_000) {
+            compose.runOnUiThread {
+                val activePlayer = player()
+                activePlayer != null && activePlayer.playbackState == Player.STATE_READY &&
+                    activePlayer.currentPosition in range &&
+                    controller.state.value.playbackState == PlaybackState.READY &&
+                    controller.state.value.currentPosition in range
+            }
+        }
+        compose.runOnIdle {
+            val activePlayer = checkNotNull(player())
+            assertTrue("Media3 position ${activePlayer.currentPosition} must be within $range",
+                activePlayer.currentPosition in range)
+            assertTrue("Controller position ${controller.state.value.currentPosition} must be within $range",
+                controller.state.value.currentPosition in range)
+        }
+    }
+
+    private fun awaitPlaying() = compose.waitUntil(10_000) {
+        compose.runOnUiThread {
+            controller.state.value.isPlaying && surface.player?.isPlaying == true
+        }
     }
 
     @Test fun movingSurfaceThenDisposingOldSurfaceKeepsNewOwner() {
         install()
+        lateinit var player: Player
+        lateinit var second: PlayerView
         compose.runOnIdle {
             val first = surface
-            val player = checkNotNull(first.player)
-            val second = PlayerView(compose.activity)
+            player = checkNotNull(first.player)
+            second = PlayerView(compose.activity)
             controller.playerViewAvailable(second)
             assertNull(first.player)
             assertSame(player, second.player)
             controller.playerViewReleased(first)
             assertSame(player, second.player)
             controller.seekTo(2_000)
-            assertTrue(controller.state.value.currentPosition >= 1_900)
+        }
+        awaitPosition(2_000) { second.player }
+        compose.runOnIdle {
+            assertSame(player, second.player)
             controller.playerViewReleased(second)
             assertNull(second.player)
         }
@@ -90,11 +128,15 @@ class MediaControllerSmokeTest {
     @Test fun stoppingActivityPausesAndRejectsBackgroundPlaybackUntilResumed() {
         install()
         compose.runOnIdle { controller.play() }
-        compose.waitUntil(10_000) { controller.state.value.isPlaying }
+        awaitPlaying()
         compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
         compose.runOnIdle {
             assertFalse(controller.state.value.isPlaying)
+            val player = checkNotNull(surface.player)
+            assertFalse(player.playWhenReady)
+            assertFalse(player.isPlaying)
             val position = controller.state.value.currentPosition
+            val playerPosition = player.currentPosition
             val quickSeekAction = controller.state.value.quickSeekAction
             controller.play()
             controller.seekTo(6_000)
@@ -102,11 +144,19 @@ class MediaControllerSmokeTest {
             controller.quickSeekRewind()
             assertFalse(controller.state.value.isPlaying)
             assertEquals(position, controller.state.value.currentPosition)
-            assertEquals(quickSeekAction, controller.state.value.quickSeekAction)
+            assertEquals(playerPosition, player.currentPosition)
+            // Legacy QuickSeekAction.equals deliberately treats every action as unique, even
+            // itself. A rejected gesture must preserve this exact instance AND its direction.
+            assertSame(quickSeekAction, controller.state.value.quickSeekAction)
+            assertEquals(quickSeekAction.direction, controller.state.value.quickSeekAction.direction)
         }
         compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
-        compose.runOnIdle { controller.play() }
-        compose.waitUntil(10_000) { controller.state.value.isPlaying }
+        compose.runOnIdle {
+            assertFalse("Foreground return must not auto-resume", controller.state.value.isPlaying)
+            assertFalse(checkNotNull(surface.player).playWhenReady)
+            controller.play()
+        }
+        awaitPlaying()
         compose.runOnIdle { controller.pause() }
     }
 
@@ -114,17 +164,16 @@ class MediaControllerSmokeTest {
         val restoration = StateRestorationTester(compose)
         install(restoration)
         lateinit var previous: DefaultVideoPlayerController
-        compose.runOnIdle {
-            controller.seekTo(2_500)
-            assertTrue(controller.state.value.currentPosition >= 2_400)
-            previous = controller
-        }
+        compose.runOnIdle { controller.seekTo(2_500) }
+        awaitPosition(2_500)
+        compose.runOnIdle { previous = controller }
         restoration.emulateSavedInstanceStateRestore()
         ready()
+        awaitPosition(2_500)
         compose.runOnIdle {
             assertNotSame(previous, controller)
-            assertTrue(controller.state.value.currentPosition >= 2_400)
             assertFalse(controller.state.value.isPlaying)
+            assertFalse(checkNotNull(surface.player).playWhenReady)
         }
     }
 
@@ -134,9 +183,9 @@ class MediaControllerSmokeTest {
         val restoration = StateRestorationTester(compose)
         install(restoration) { source }
         lateinit var previous: DefaultVideoPlayerController
+        compose.runOnIdle { controller.seekTo(3_500) }
+        awaitPosition(3_500)
         compose.runOnIdle {
-            controller.seekTo(3_500)
-            assertTrue(controller.state.value.currentPosition >= 3_400)
             previous = controller
             source = VideoPlayerSource.Raw(R.raw.smoke_silence_b)
         }
@@ -146,6 +195,8 @@ class MediaControllerSmokeTest {
             assertNotSame(previous, controller)
             assertTrue("A different source must start near its initial position",
                 controller.state.value.currentPosition < 1_000)
+            assertTrue("The actual Media3 player must also start at the new source's beginning",
+                checkNotNull(surface.player).currentPosition < 1_000)
         }
     }
 }
