@@ -46,6 +46,41 @@ image availability is not a reason to bypass certificate errors. General image
 and update/download traffic must remain separate from authenticated cookies and
 headers. Normal TLS errors must never trigger a permissive trust manager.
 
+## Dependency permissions and remaining identifiers
+
+The pinned `com.github.gzu-liyujiang:Android_CN_OAID:4.2.17` library
+[declares](https://github.com/gzu-liyujiang/Android_CN_OAID/blob/4.2.17/library/src/main/AndroidManifest.xml)
+`READ_PHONE_STATE`, `WRITE_SETTINGS` and Google `AD_ID`. Its exact published AAR
+was inspected; SHA-256:
+`505a052f4aa7cafa669e6655a3cf2f540981fccaed22628f74b05cdc49978e26`.
+The app now uses unconditional `tools:node="remove"` markers for
+`READ_PHONE_STATE` and `WRITE_SETTINGS`, preventing library manifests from
+restoring those unused permissions. Omitting a permission from the app source
+alone is insufficient; see the Android
+[manifest-merger rules](https://developer.android.com/build/manage-manifests#node_markers).
+The final APK permission check must verify the merged result on every build.
+
+The app's `App.Config.init` and `OAIDGetter.onActivityResumed` call only
+`DeviceID.supportedOAID` and `DeviceID.getOAID(Context, IGetter)`. The library's
+[DeviceID](https://github.com/gzu-liyujiang/Android_CN_OAID/blob/4.2.17/library/src/main/java/com/github/gzuliyujiang/oaid/DeviceID.java)
+settings-write path is `register` → `getOAIDOrOtherId` → `getOtherId` →
+`getGUID` → `saveUuidToSystemSettings` → `Settings.System.putString`.
+Neither these GUID entry points nor another settings-writing/requesting call
+is used by app source. `PermissionUtils` contains only a settings-permission
+display-name mapping; it does not request that permission. The source regression
+guards the removal marker and absence of these unused entry points.
+
+`AD_ID` is retained: the existing `getOAID` path reaches
+[OAIDFactory](https://github.com/gzu-liyujiang/Android_CN_OAID/blob/4.2.17/library/src/main/java/com/github/gzuliyujiang/oaid/impl/OAIDFactory.java),
+which selects Google services for Xiaomi Global or as its universal fallback.
+[GmsImpl.doGet](https://github.com/gzu-liyujiang/Android_CN_OAID/blob/4.2.17/library/src/main/java/com/github/gzuliyujiang/oaid/impl/GmsImpl.java)
+binds Google's advertising-ID service, checks the limit-ad-tracking flag and
+calls `IAdvertisingIdService.getId`. The app retains OAID/AAID fields in existing
+API requests. Removing this capability needs a separate compatibility/privacy
+decision; these changes do **not** remove all device identifiers or establish
+real-account safety. No advertising-ID service or actual permission grant was
+tested during this source audit.
+
 ## Signing
 
 See [SIGNING.md](SIGNING.md). Unsigned builds remain the default. Opt-in signing

@@ -19,7 +19,8 @@ def verify(text):
     if re.search(r'(?mi)^maxSdkVersion:', text):
         raise ValueError('APK unexpectedly declares a maximum supported SDK')
     forbidden = {'android.permission.READ_MEDIA_IMAGES', 'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
-                 'android.permission.REQUEST_INSTALL_PACKAGES', 'android.permission.READ_PHONE_STATE'}
+                 'android.permission.REQUEST_INSTALL_PACKAGES', 'android.permission.READ_PHONE_STATE',
+                 'android.permission.WRITE_SETTINGS'}
     permissions = set(re.findall(r"(?m)^uses-permission[^:]*: name='([^']+)'", text))
     if permissions & forbidden:
         raise ValueError('APK contains a removed sensitive permission')

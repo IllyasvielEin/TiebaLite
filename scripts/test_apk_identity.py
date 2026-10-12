@@ -30,7 +30,7 @@ class ApkIdentityTest(unittest.TestCase):
 
     def test_removed_permissions_rejected(self):
         for permission in ['READ_MEDIA_IMAGES', 'READ_MEDIA_VISUAL_USER_SELECTED',
-                           'REQUEST_INSTALL_PACKAGES', 'READ_PHONE_STATE']:
+                           'REQUEST_INSTALL_PACKAGES', 'READ_PHONE_STATE', 'WRITE_SETTINGS']:
             with self.subTest(permission=permission), self.assertRaises(ValueError):
                 verify(BASE + f"uses-permission: name='android.permission.{permission}'\n")
 

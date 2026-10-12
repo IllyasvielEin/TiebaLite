@@ -80,6 +80,26 @@ class PrivacyBoundaryChecks(unittest.TestCase):
         self.assertEqual('remove', removal.get(TOOLS + 'node'))
         self.assertNotIn(TOOLS + 'selector', removal.attrib)
 
+    def test_unused_guid_settings_permission_is_removed(self):
+        root = ET.parse(MAIN / 'AndroidManifest.xml').getroot()
+        permissions = [node for node in root
+                       if node.tag in ('uses-permission', 'uses-permission-sdk-23')
+                       and node.get(ANDROID + 'name') == 'android.permission.WRITE_SETTINGS']
+        self.assertEqual(1, len(permissions))
+        removal = permissions[0]
+        self.assertEqual('uses-permission', removal.tag)
+        self.assertEqual('remove', removal.get(TOOLS + 'node'))
+        self.assertNotIn(TOOLS + 'selector', removal.attrib)
+        # The app uses the OAID-only overload, never the GUID-persisting fallback.
+        for path in JAVA.rglob('*'):
+            if path.suffix not in ('.java', '.kt'):
+                continue
+            with self.subTest(source=path.relative_to(JAVA)):
+                source = path.read_text()
+                self.assertNotRegex(source, r'\bDeviceID\s*\.\s*(register|getGUID|getClientId\w*)\s*\(')
+                self.assertNotRegex(source, r'\bSettings\s*\.\s*System\s*\.\s*put\w*\s*\(')
+                self.assertNotIn('ACTION_MANAGE_WRITE_SETTINGS', source)
+
     def test_custom_routes_remain_unverified_and_unchanged(self):
         app = ET.parse(MAIN / 'AndroidManifest.xml').getroot().find('application')
         routes = []
