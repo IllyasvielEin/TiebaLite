@@ -55,10 +55,12 @@ jobs:
           cache-cleanup: on-success
           cache-read-only: ${{ github.ref_name != github.event.repository.default_branch }}
 
-      - name: Test metadata boundary
+      - name: Run artifact and source regressions
         run: |
           python3 scripts/test_build_metadata.py
+          python3 scripts/test_validation_reports.py
           python3 app/src/test/security/check_privacy_boundaries.py
+          python3 app/src/test/compatibility/check_compose_compatibility.py
 
       - name: Test and build unsigned release
         run: ./gradlew --no-daemon --stacktrace :app:testReleaseUnitTest :app:assembleRelease
@@ -91,12 +93,12 @@ jobs:
           path: out/artifact/
           if-no-files-found: error
           retention-days: 7
-          compression-level: 0
+          compression-level: 6
 
       - name: Full Android lint (blocking quality gate)
         run: ./gradlew --no-daemon --stacktrace :app:lintRelease
 
-      - name: Collect sanitized validation reports
+      - name: Collect filtered validation reports
         if: ${{ always() }}
         run: python3 scripts/collect_validation_reports.py
 
