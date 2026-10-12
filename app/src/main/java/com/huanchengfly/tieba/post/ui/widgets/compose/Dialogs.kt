@@ -23,6 +23,7 @@ import androidx.compose.material.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -50,7 +52,10 @@ import com.huanchengfly.tieba.post.ui.common.windowsizeclass.WindowWidthSizeClas
 import com.huanchengfly.tieba.post.ui.widgets.compose.dialogs.AnyPopDialog
 import com.huanchengfly.tieba.post.ui.widgets.compose.dialogs.AnyPopDialogProperties
 import com.huanchengfly.tieba.post.ui.widgets.compose.dialogs.DirectionState
-import com.huanchengfly.tieba.post.ui.widgets.compose.picker.TimePicker
+import com.huanchengfly.tieba.post.ui.widgets.compose.picker.PickerEditSession
+import com.huanchengfly.tieba.post.ui.widgets.compose.picker.TimePickerContent
+import com.huanchengfly.tieba.post.ui.widgets.compose.picker.rememberTimePickerState
+import com.huanchengfly.tieba.post.ui.widgets.compose.picker.PickerTime
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -59,10 +64,20 @@ fun DialogScope.DialogPositiveButton(
     text: String,
     onClick: () -> Unit = {}
 ) {
+    DialogPositiveButton(text = text, enabled = true, onClick = { onClick(); true })
+}
+
+// The public overload above preserves positional and trailing-lambda call sites.
+@Composable
+private fun DialogScope.DialogPositiveButton(
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Boolean
+) {
     TextButton(
+        enabled = enabled,
         onClick = {
-            onClick()
-            dismiss()
+            if (onClick()) dismiss()
         },
         modifier = Modifier
             .fillMaxWidth(),
@@ -121,15 +136,47 @@ fun TimePickerDialog(
     cancelText: String = stringResource(id = R.string.button_cancel),
     content: @Composable (DialogScope.() -> Unit) = {},
 ) {
-    var timeVal by remember { mutableStateOf(currentTime) }
+    var timeVal by remember(currentTime, is24TimeFormat, dialogState.show) {
+        mutableStateOf(PickerTime.parse(currentTime, is24TimeFormat).toString())
+    }
+    val pickerState = rememberTimePickerState(timeVal, is24TimeFormat)
+    val itemHeight = 32.dp
+    val itemHeightInPixels = with(LocalDensity.current) { itemHeight.roundToPx() }
+    val parsedTime = remember(timeVal, is24TimeFormat) { PickerTime.parse(timeVal, is24TimeFormat) }
+    val canConfirm by remember(pickerState, parsedTime, is24TimeFormat, itemHeightInPixels) {
+        derivedStateOf { pickerState.isSettled(parsedTime, is24TimeFormat, itemHeightInPixels) }
+    }
+    val session = remember(dialogState.show) { PickerEditSession() }
+    var sessionOpen by remember(dialogState.show) { mutableStateOf(true) }
+    fun cancelSession() {
+        if (session.cancel()) {
+            sessionOpen = false
+            onCancel?.invoke()
+        }
+    }
     Dialog(
         modifier = modifier,
         dialogState = dialogState,
-        onDismiss = onCancel,
+        onDismiss = { cancelSession() },
         title = title,
         buttons = {
-            DialogPositiveButton(text = confirmText, onClick = { onConfirm.invoke(timeVal) })
-            DialogNegativeButton(text = cancelText, onClick = onCancel)
+            DialogPositiveButton(
+                text = confirmText,
+                enabled = dialogState.show && sessionOpen && canConfirm,
+                onClick = {
+                    // Recheck actual state: a previously enabled button may now be scrolling/resetting.
+                    val ready = dialogState.show && pickerState.isSettled(
+                        PickerTime.parse(timeVal, is24TimeFormat), is24TimeFormat, itemHeightInPixels
+                    )
+                    val accepted = session.confirm(ready)
+                    if (accepted) {
+                        sessionOpen = false
+                        onConfirm(timeVal)
+                    }
+                    accepted
+                }
+            )
+            DialogNegativeButton(text = cancelText, onClick = { cancelSession() })
         },
     ) {
         Column(modifier = Modifier.padding(horizontal = 24.dp)) {
@@ -138,14 +185,29 @@ fun TimePickerDialog(
                     content()
                 }
             }
-            TimePicker(
+            TimePickerContent(
                 currentTime = timeVal,
                 onTimeChanged = {
-                    timeVal = it
-                    onValueChange?.invoke(it)
+                    if (session.isOpen && dialogState.show) {
+                        timeVal = it
+                        onValueChange?.invoke(it)
+                    }
                 },
                 is24TimeFormat = is24TimeFormat,
-                modifier = Modifier.height(150.dp)
+                pickerState = pickerState,
+                modifier = Modifier.height(150.dp),
+                itemHeight = itemHeight,
+                divider = com.huanchengfly.tieba.post.ui.widgets.compose.picker.NumberPickerDivider(),
+                itemStyles = com.huanchengfly.tieba.post.ui.widgets.compose.picker.ItemStyles(
+                    defaultTextStyle = MaterialTheme.typography.body1.copy(
+                        color = MaterialTheme.colors.onBackground.copy(alpha = androidx.compose.material.ContentAlpha.medium),
+                        fontWeight = FontWeight.Normal
+                    ),
+                    selectedTextStyle = MaterialTheme.typography.h5.copy(
+                        color = MaterialTheme.colors.onBackground.copy(alpha = androidx.compose.material.ContentAlpha.high),
+                        fontWeight = FontWeight.Medium
+                    )
+                )
             )
             Spacer(modifier = Modifier.height(16.dp))
         }

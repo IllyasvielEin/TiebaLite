@@ -6,6 +6,8 @@ import android.util.AttributeSet;
 
 import androidx.preference.DialogPreference;
 
+import java.util.Locale;
+
 public class TimePickerPreference extends DialogPreference {
     public int hour = 0;
     public int minute = 0;
@@ -33,7 +35,7 @@ public class TimePickerPreference extends DialogPreference {
     }
 
     public static String timeToString(int h, int m) {
-        return String.format("%02d", h) + ":" + String.format("%02d", m);
+        return String.format(Locale.ROOT, "%02d:%02d", h, m);
     }
 
     @Override

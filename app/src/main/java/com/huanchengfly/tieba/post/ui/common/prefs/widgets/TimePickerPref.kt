@@ -6,18 +6,15 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.unit.toSize
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.huanchengfly.tieba.post.getString
@@ -25,6 +22,7 @@ import com.huanchengfly.tieba.post.ui.common.prefs.LocalPrefsDataStore
 import com.huanchengfly.tieba.post.ui.widgets.compose.TimePickerDialog
 import com.huanchengfly.tieba.post.ui.widgets.compose.rememberDialogState
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -64,31 +62,27 @@ fun TimePickerPerf(
     val scope = rememberCoroutineScope()
 
     val datastore = LocalPrefsDataStore.current
-    val prefs by remember { datastore.data }.collectAsState(initial = null)
-
     //value should only change when save button is clicked
-    var value by remember { mutableStateOf(datastore.getString(key, defaultValue)) }
-    //value of the TextField which changes every time the text is modified
-    var timeVal by remember { mutableStateOf(value) }
+    var value by remember(datastore, key, defaultValue) {
+        mutableStateOf(datastore.getString(key, defaultValue))
+    }
+    val currentOnValueSaved by rememberUpdatedState(onValueSaved)
 
-    var dialogSize by remember { mutableStateOf(Size.Zero) }
-
-
-    LaunchedEffect(datastore.data) {
+    LaunchedEffect(datastore, selectionKey, defaultValue) {
         datastore.data.collectLatest { pref ->
-            pref[selectionKey]?.also {
-                value = it
-            }
+            value = pref[selectionKey] ?: defaultValue
         }
     }
 
-    fun edit() = run {
+    fun edit(confirmedTime: String) = run {
         scope.launch {
             try {
                 datastore.edit { preferences ->
-                    preferences[selectionKey] = timeVal
+                    preferences[selectionKey] = confirmedTime
                 }
-                onValueSaved(timeVal)
+                currentOnValueSaved(confirmedTime)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(
                     "EditTextPref",
@@ -109,30 +103,20 @@ fun TimePickerPerf(
     )
 
     if (dialogState.show) {
-        //reset
-        LaunchedEffect(null) {
-            timeVal = value
-        }
-
+        // A fresh edit session starts directly from the persisted value before any wheel composes.
         TimePickerDialog(
             title = {
                 if (dialogTitle != null) {
                     Text(text = dialogTitle)
                 }
             },
-            currentTime = timeVal,
+            currentTime = value,
             onConfirm = {
-                timeVal = it
-                onValueChange(it)
-                edit()
-            },
-            modifier = Modifier.onGloballyPositioned {
-                dialogSize = it.size.toSize()
+                edit(it)
             },
             dialogState = dialogState,
             onValueChange = {
-                timeVal = it.toString()
-                onValueChange(it.toString())
+                onValueChange(it)
             },
         ) {
             if (dialogMessage != null) {

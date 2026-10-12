@@ -13,22 +13,23 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.huanchengfly.tieba.post.pxToDp
-import kotlinx.coroutines.launch
-import kotlin.math.abs
+import kotlinx.coroutines.flow.collect
 
 @Composable
 fun <T> WheelPicker(
@@ -41,35 +42,91 @@ fun <T> WheelPicker(
     onItemChanged: (T) -> Unit = {},
     itemToString: (T) -> String = { it.toString() }
 ) {
-    val scope = rememberCoroutineScope()
-    var currItem by remember { mutableStateOf(selectedItem) }
+    PickerColumn(
+        modifier = modifier,
+        items = items,
+        selectedItem = selectedItem,
+        itemHeight = itemHeight,
+        divider = divider,
+        itemStyles = itemStyles,
+        onItemChanged = onItemChanged,
+        itemToString = itemToString,
+        cyclic = true
+    )
+}
+
+/** Shared lifecycle owner for cyclic number wheels and the finite period column. */
+@Composable
+internal fun <T> PickerColumn(
+    modifier: Modifier,
+    items: List<T>,
+    selectedItem: T?,
+    itemHeight: Dp,
+    divider: NumberPickerDivider,
+    itemStyles: ItemStyles,
+    onItemChanged: (T) -> Unit,
+    itemToString: (T) -> String,
+    cyclic: Boolean,
+    columnState: PickerColumnState = rememberPickerColumnState(
+        if (cyclic) initialWheelIndex(items.size, selectedIndex(items, selectedItem))
+        else selectedIndex(items, selectedItem)
+    )
+) {
+    val currentOnItemChanged by rememberUpdatedState(onItemChanged)
+    val currentSelectedItem by rememberUpdatedState(selectedItem)
     var listHeightInPixels by remember { mutableStateOf(0) }
-    var itemHeightInPixels by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+    val itemHeightInPixels = with(density) { itemHeight.roundToPx() }
+    val listState = columnState.listState
 
-    val listState = rememberSaveable(saver = LazyListState.Saver) {
-        if (items.isNotEmpty()) {
-            val centerList = Int.MAX_VALUE / 2 - (Int.MAX_VALUE / 2) % items.size
-            val selectedIndex = selectedItem?.let { items.indexOf(selectedItem) } ?: 0
-            LazyListState(
-                firstVisibleItemIndex = centerList + selectedIndex
-            )
-        } else {
-            LazyListState()
+    LaunchedEffect(listState, items, cyclic, itemHeightInPixels, listHeightInPixels) {
+        columnState.positioned = false
+        if (items.isEmpty() || itemHeightInPixels <= 0 || listHeightInPixels <= 0) return@LaunchedEffect
+        val targetOffset = if (cyclic) itemHeightInPixels / 2 else 0
+        val selection = PickerSelection(items, currentSelectedItem)
+        val requestedIndex = selectedIndex(items, currentSelectedItem)
+        val initialIndex = if (cyclic) {
+            if (listState.firstVisibleItemIndex < items.size) initialWheelIndex(items.size, requestedIndex)
+            else nearestWheelIndex(listState.firstVisibleItemIndex, items.size, requestedIndex)
+        } else requestedIndex
+        // Positioning an initial/external selection is silent, including restored list state.
+        columnState.positioned = runPickerScroll { listState.scrollToItem(initialIndex, targetOffset) }
+        val position = object : PickerScrollPosition {
+            override val isScrolling get() = listState.isScrollInProgress
+            override val offset get() = listState.firstVisibleItemScrollOffset
+            override suspend fun animateBy(delta: Float) { listState.animateScrollBy(delta) }
         }
-    }
-
-    if (listState.isScrollInProgress.not() && itemHeightInPixels > 0) {
-        val needScrollTop = -listState.firstVisibleItemScrollOffset + itemHeightInPixels / 2
-
-        if (abs(listState.firstVisibleItemScrollOffset - itemHeightInPixels / 2) > 1) {
-
-            LaunchedEffect(key1 = listState) {
-                scope.launch {
-                    listState.animateScrollBy(needScrollTop.toFloat())
-                    if (items[listState.firstVisibleItemIndex % items.size] != currItem) {
-                        currItem = items[listState.firstVisibleItemIndex % items.size]
-                        onItemChanged(currItem!!)
-                    }
+        suspend fun resetSelection(index: Int) {
+            columnState.positioned = false
+            val visibleIndex = if (cyclic) {
+                nearestWheelIndex(listState.firstVisibleItemIndex, items.size, index)
+            } else index
+            columnState.positioned = runPickerScroll { listState.scrollToItem(visibleIndex, targetOffset) }
+        }
+        // Sequential collect deliberately avoids cancelling a snap on its own scrolling=true.
+        snapshotFlow {
+            PickerObservation(
+                listState.isScrollInProgress,
+                listState.firstVisibleItemIndex,
+                listState.firstVisibleItemScrollOffset,
+                currentSelectedItem
+            )
+        }.collect { observation ->
+            val resetIndex = selection.request(observation.selectedItem)
+            if (resetIndex != null) {
+                resetSelection(resetIndex)
+            } else if (!observation.isScrolling && settlePicker(
+                    position, targetOffset, finiteItemHeight = itemHeightInPixels.takeUnless { cyclic }
+                )) {
+                // External changes during an animation supersede its old callback result.
+                val pendingReset = selection.request(currentSelectedItem)
+                if (pendingReset != null) {
+                    resetSelection(pendingReset)
+                } else {
+                    val index = if (cyclic) listState.firstVisibleItemIndex % items.size
+                        else listState.firstVisibleItemIndex
+                    selection.settle(index)?.let { currentOnItemChanged(it) }
+                    columnState.positioned = true
                 }
             }
         }
@@ -78,32 +135,31 @@ fun <T> WheelPicker(
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         if (items.isNotEmpty()) {
             LazyColumn(
-                contentPadding = PaddingValues(top = (listHeightInPixels / 2).pxToDp().dp),
+                contentPadding = if (cyclic) {
+                    PaddingValues(top = with(density) { (listHeightInPixels / 2).toDp() })
+                } else PaddingValues(top = itemHeight, bottom = itemHeight),
                 state = listState,
                 modifier = Modifier
                     .fillMaxWidth(1f)
+                    .then(if (cyclic) Modifier else Modifier.height(itemHeight * 3))
                     .onGloballyPositioned {
-                        if (listHeightInPixels < itemHeightInPixels) {
-                            listHeightInPixels = it.size.height
-                        }
+                        listHeightInPixels = it.size.height
                     }
             ) {
-                items(Int.MAX_VALUE) { i ->
-                    val index = i % items.size
+                items(if (cyclic) Int.MAX_VALUE else items.size) { i ->
+                    val index = if (cyclic) i % items.size else i
+                    val selected by remember(listState, i) {
+                        derivedStateOf { i == listState.firstVisibleItemIndex }
+                    }
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .fillMaxWidth(1f)
                             .height(itemHeight)
-                            .onGloballyPositioned {
-                                if (itemHeightInPixels == 0) {
-                                    itemHeightInPixels = it.size.height
-                                }
-                            }
                     ) {
                         Text(
                             text = itemToString(items[index]),
-                            style = if (i == listState.firstVisibleItemIndex) itemStyles.selectedTextStyle else itemStyles.defaultTextStyle
+                            style = if (selected) itemStyles.selectedTextStyle else itemStyles.defaultTextStyle
                         )
                     }
                 }
@@ -130,6 +186,32 @@ fun <T> WheelPicker(
         }
     }
 }
+
+internal class PickerColumnState(val listState: LazyListState) {
+    var positioned by mutableStateOf(false)
+
+    fun isSettled(size: Int, selectedIndex: Int, itemHeight: Int, cyclic: Boolean): Boolean =
+        itemHeight > 0 && isPickerSettled(
+            positioned, listState.isScrollInProgress, listState.firstVisibleItemIndex,
+            listState.firstVisibleItemScrollOffset, size, selectedIndex,
+            targetOffset = if (cyclic) itemHeight / 2 else 0, cyclic = cyclic
+        )
+}
+
+@Composable
+internal fun rememberPickerColumnState(initialIndex: Int): PickerColumnState {
+    val listState = rememberSaveable(saver = LazyListState.Saver) {
+        LazyListState(firstVisibleItemIndex = initialIndex)
+    }
+    return remember(listState) { PickerColumnState(listState) }
+}
+
+private data class PickerObservation<T>(
+    val isScrolling: Boolean,
+    val index: Int,
+    val offset: Int,
+    val selectedItem: T?
+)
 
 @Immutable
 class NumberPickerDivider(
