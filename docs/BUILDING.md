@@ -27,6 +27,10 @@ Official references:
 - https://kotlinlang.org/docs/gradle-configure-project.html
 - https://github.com/gyf-dev/ImmersionBar
 
+Publication and transport restrictions are documented in
+[SECURITY-BOUNDARIES.md](SECURITY-BOUNDARIES.md) and
+[PUBLICATION_BOUNDARY.md](PUBLICATION_BOUNDARY.md).
+
 ## Local verification
 
 Install JDK 17 and Android SDK platform 36 / Build Tools 36.0.0 from their
@@ -48,8 +52,11 @@ separate decision. This change does neither.
 ## GitHub Actions
 
 Run **Build learning APK** manually from Actions. The selected ref is built.
-There are no push/tag release triggers, no public GitHub Release creation, no
-signing secrets, and no write token permissions. Checkout does not retain its
+Leave **sign_apk** unchecked for the default unsigned proof. There are no
+push/tag release triggers, public GitHub Release creation, or write token
+permissions. Optional signing requires an explicitly configured owner-controlled
+key and only runs on the trusted default branch after the build and full lint
+pass; see [SIGNING.md](SIGNING.md) for the separate-runner trust boundary. Checkout does not retain its
 authentication credential. Actions are pinned to full commit SHAs, and
 setup-gradle is the only Gradle cache owner (including wrapper validation).
 

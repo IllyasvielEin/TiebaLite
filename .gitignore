@@ -74,3 +74,10 @@ commit-message.txt
 # Python source-check bytecode
 __pycache__/
 *.py[cod]
+
+# Private Android signing material (never commit or upload as artifacts)
+*.keystore
+*.p12
+*.pfx
+*.key
+*.b64

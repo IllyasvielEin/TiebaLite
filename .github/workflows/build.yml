@@ -2,6 +2,12 @@ name: Build learning APK
 
 on:
   workflow_dispatch:
+    inputs:
+      sign_apk:
+        description: Sign after all build and lint checks (trusted default branch only)
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -14,6 +20,8 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    outputs:
+      unsigned_artifact_id: ${{ steps.unsigned_upload.outputs.artifact-id }}
     env:
       CI: 'true'
     steps:
@@ -59,7 +67,10 @@ jobs:
         run: |
           python3 scripts/test_build_metadata.py
           python3 scripts/test_validation_reports.py
+          python3 scripts/test_signing_workflow.py
+          python3 scripts/test_transport_security.py
           python3 app/src/test/security/check_privacy_boundaries.py
+          python3 app/src/test/security/check_publication_boundaries.py
           python3 app/src/test/compatibility/check_compose_compatibility.py
 
       - name: Test and build unsigned release
@@ -83,10 +94,11 @@ jobs:
             cp app/build/outputs/mapping/release/mapping.txt out/artifact/
           fi
           python3 scripts/build_metadata.py out/artifact/build-metadata.json
-          printf '%s\n' 'UNSIGNED-EXPERIMENTAL-not-login-validated' 'Build proof only: full lint runs after this archive and may still fail. Check the run and separate reports.' 'Authenticated HTTP risks remain unresolved; this is not approved for real-account login.' 'Sign with your own approved key before installation. This workflow does not store or generate signing keys.' > out/artifact/README.txt
+          printf '%s\n' 'UNSIGNED-EXPERIMENTAL-not-login-validated' 'Build proof only: full lint runs after this archive and may still fail. Check the run and separate reports.' 'Credential transport and login compatibility are not fully validated; this is not approved for real-account login.' 'Sign with your own approved key before installation. This workflow does not store or generate signing keys.' > out/artifact/README.txt
           (cd out/artifact && sha256sum -- * > SHA256SUMS)
 
       - name: Upload learning artifact
+        id: unsigned_upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: UNSIGNED-EXPERIMENTAL-not-login-validated-${{ github.sha }}-${{ github.run_attempt }}
@@ -110,3 +122,175 @@ jobs:
           path: out/validation-reports/
           if-no-files-found: warn
           retention-days: 7
+
+  sign:
+    name: Sign experimental APK (explicit opt-in)
+    needs: build
+    if: >-
+      ${{ needs.build.result == 'success' && github.event_name == 'workflow_dispatch' &&
+          inputs.sign_apk == true && github.ref == 'refs/heads/4.0-dev' &&
+          github.event.repository.default_branch == '4.0-dev' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      # No checkout, Gradle, application dependencies or artifact-provided scripts here.
+      - name: Set up signing JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '17.0.20+8'
+
+      - name: Check preinstalled signing tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          for tool in apksigner zipalign; do
+            if ! test -x "$ANDROID_HOME/build-tools/36.0.0/$tool"; then
+              echo '::error::Required preinstalled signing tool is missing'
+              exit 1
+            fi
+          done
+      - name: Download this run's exact unsigned artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.build.outputs.unsigned_artifact_id }}
+          path: ${{ runner.temp }}/unsigned-input
+          merge-multiple: true
+          digest-mismatch: error
+
+      - name: Validate unsigned input before exposing secrets
+        shell: bash
+        env:
+          EXPECTED_ARTIFACT_ID: ${{ needs.build.outputs.unsigned_artifact_id }}
+          EXPECTED_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY_VALIDATE'
+          import hashlib, json, os, re
+          from pathlib import Path
+          def require(condition):
+              if not condition:
+                  raise SystemExit('Unsigned artifact or signing configuration validation failed')
+          require(re.fullmatch(r'[1-9][0-9]*', os.environ['EXPECTED_ARTIFACT_ID']))
+          cert = os.environ['EXPECTED_CERT_SHA256'].replace(':', '').lower()
+          require(re.fullmatch(r'[0-9a-f]{64}', cert))
+          root = Path(os.environ['RUNNER_TEMP']) / 'unsigned-input'
+          files = list(root.iterdir())
+          require(all(p.is_file() and not p.is_symlink() for p in files))
+          apks = [p for p in files if re.fullmatch(r'[A-Za-z0-9_.()+-]+\.apk', p.name)]
+          require(len(apks) == 1)
+          required = {apks[0].name, 'build-metadata.json', 'output-metadata.json', 'README.txt', 'SHA256SUMS'}
+          require(required <= {p.name for p in files} <= required | {'mapping.txt'})
+          sums = {}
+          for line in (root / 'SHA256SUMS').read_text().splitlines():
+              match = re.fullmatch(r'([0-9a-f]{64})  ([A-Za-z0-9_.()+-]+)', line)
+              require(match is not None)
+              digest, name = match.groups()
+              require(name not in sums)
+              sums[name] = digest
+          require(set(sums) == {p.name for p in files} - {'SHA256SUMS'})
+          for name, digest in sums.items():
+              require(hashlib.sha256((root / name).read_bytes()).hexdigest() == digest)
+          metadata = json.loads((root / 'build-metadata.json').read_text())
+          for key, variable in [('commit', 'GITHUB_SHA'), ('repository', 'GITHUB_REPOSITORY'),
+                                ('run_id', 'GITHUB_RUN_ID'), ('run_attempt', 'GITHUB_RUN_ATTEMPT')]:
+              require(metadata.get(key) == os.environ[variable])
+          require(metadata.get('working_tree_dirty') is False)
+          require(metadata.get('signing') == 'unsigned')
+          require(metadata.get('artifact_label') == 'UNSIGNED-EXPERIMENTAL-not-login-validated')
+          require(metadata.get('build_tools') == '36.0.0')
+          android = json.loads((root / 'output-metadata.json').read_text())
+          require(android.get('artifactType', {}).get('type') == 'APK')
+          require(len(android.get('elements', [])) == 1)
+          require(android['elements'][0].get('outputFile') == apks[0].name)
+          require(android['elements'][0].get('filters') == [])
+          work = Path(os.environ['RUNNER_TEMP']) / 'signing-work'
+          work.mkdir(mode=0o700)
+          (work / 'input.apk').write_bytes(apks[0].read_bytes())
+          (work / 'source.json').write_text(json.dumps({
+              'commit': metadata['commit'], 'repository': metadata['repository'],
+              'run_id': metadata['run_id'], 'run_attempt': metadata['run_attempt'],
+              'unsigned_sha256': sums[apks[0].name], 'certificate_sha256': cert,
+              'unsigned_artifact_id': os.environ['EXPECTED_ARTIFACT_ID'],
+          }))
+          PY_VALIDATE
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 "$RUNNER_TEMP/signing-work/input.apk"
+          if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$RUNNER_TEMP/signing-work/input.apk" >/dev/null 2>&1; then
+            echo '::error::Expected an unsigned APK'
+            exit 1
+          fi
+
+      - name: Sign and verify with step-scoped secrets
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -rf -- "$RUNNER_TEMP/signing-private"' EXIT
+          python3 - <<'PY_SIGN'
+          import base64, hashlib, json, os, re, subprocess
+          from pathlib import Path
+          def main():
+              required = ('ANDROID_KEYSTORE_BASE64', 'ANDROID_KEYSTORE_PASSWORD',
+                          'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD')
+              if not all(os.environ.get(name) for name in required):
+                  raise ValueError('missing signing configuration')
+              root = Path(os.environ['RUNNER_TEMP'])
+              private = root / 'signing-private'
+              private.mkdir(mode=0o700)
+              key = private / 'keystore'
+              key.write_bytes(base64.b64decode(''.join(os.environ['ANDROID_KEYSTORE_BASE64'].split()), validate=True))
+              key.chmod(0o600)
+              work = root / 'signing-work'
+              source = json.loads((work / 'source.json').read_text())
+              output = root / 'signed-output'
+              output.mkdir(mode=0o700)
+              apk = output / 'experimental-not-login-validated.apk'
+              signer = str(Path(os.environ['ANDROID_HOME']) / 'build-tools/36.0.0/apksigner')
+              subprocess.run([signer, 'sign', '--ks', str(key), '--ks-type', 'PKCS12',
+                  '--ks-key-alias', os.environ['ANDROID_KEY_ALIAS'],
+                  '--ks-pass', 'env:ANDROID_KEYSTORE_PASSWORD',
+                  '--key-pass', 'env:ANDROID_KEY_PASSWORD', '--v4-signing-enabled', 'false',
+                  '--out', str(apk), str(work / 'input.apk')],
+                  check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+              result = subprocess.run([signer, 'verify', '--verbose', '--print-certs', str(apk)],
+                  check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+              certs = re.findall(r'^Signer #[0-9]+ certificate SHA-256 digest: ([0-9a-fA-F]{64})$',
+                                 result.stdout, re.MULTILINE)
+              if len(certs) != 1 or certs[0].lower() != source['certificate_sha256']:
+                  raise ValueError('unexpected signing certificate')
+              source.update(signing='signed', full_lint_status='passed',
+                  artifact_label='SIGNED-EXPERIMENTAL-not-login-validated',
+                  signed_sha256=hashlib.sha256(apk.read_bytes()).hexdigest(),
+                  warning='Signing does not validate login safety or runtime behavior.')
+              (output / 'signing-metadata.json').write_text(json.dumps(source, indent=2) + '\n')
+              (output / 'SHA256SUMS').write_text(''.join(
+                  hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n'
+                  for p in sorted(output.iterdir())))
+          try:
+              main()
+          except Exception:
+              raise SystemExit('Signing or certificate verification failed; no signed artifact will be uploaded') from None
+          PY_SIGN
+
+      - name: Remove temporary signing material
+        if: ${{ always() }}
+        shell: bash
+        run: rm -rf -- "$RUNNER_TEMP/signing-private" "$RUNNER_TEMP/signing-work" "$RUNNER_TEMP/unsigned-input"
+
+      - name: Upload verified experimental signed APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: SIGNED-EXPERIMENTAL-not-login-validated-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/signed-output/experimental-not-login-validated.apk
+            ${{ runner.temp }}/signed-output/SHA256SUMS
+            ${{ runner.temp }}/signed-output/signing-metadata.json
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
