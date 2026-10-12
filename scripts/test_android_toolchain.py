@@ -38,6 +38,7 @@ class AndroidToolchainTests(unittest.TestCase):
         for name, version in [('minSdk', 35), ('compileSdk', 37), ('targetSdk', 37)]:
             self.assertRegex(APP, rf'{name}\s*=\s*{version}\b')
         self.assertNotRegex(APP, r'\bmaxSdk\b')
+        self.assertIn("android.nonFinalResIds=true", (ROOT / "gradle.properties").read_text())
         self.assertNotIn('applicationVariants', APP)
         self.assertNotIn('BaseVariantOutputImpl', APP)
         self.assertIn('beforeVariants(selector().all())', APP)

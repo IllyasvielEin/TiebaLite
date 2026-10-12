@@ -68,8 +68,10 @@ promote this candidate to verified until all project gates pass.
   public `androidComponents.beforeVariants` and `HostTestBuilder.UNIT_TEST_TYPE`.
   This preserves the existing `:app:testReleaseUnitTest` CI gate despite AGP 9's
   new tested-build-type-only default.
-- Java resource-ID switch cases are migrated to comparisons, preserving the
-  new compile-time R-class default without a compatibility opt-out.
+- Java resource-ID switch cases are migrated to comparisons. Non-final resource
+  IDs are explicitly enabled for AGP9 optimized resource shrinking; no optimizer
+  opt-out is used. The first Android CI reached R8 and exposed the inherited
+  `android.nonFinalResIds=false` setting, which this correction removes.
 - Eight existing memberless component/Glide keep rules now explicitly retain
   their no-argument constructor. AGP 9's strict keep-rule semantics no longer
   retain that constructor implicitly. This preserves those rules' previous
