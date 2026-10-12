@@ -31,9 +31,6 @@ jobs:
     env:
       CI: 'true'
       ANDROID_SERIAL: emulator-5554
-      ANDROID_USER_HOME: ${{ runner.temp }}/offline-android
-      ANDROID_EMULATOR_HOME: ${{ runner.temp }}/offline-android
-      ANDROID_AVD_HOME: ${{ runner.temp }}/offline-avd
       SMOKE_IMAGE: ${{ matrix.image }}
       SMOKE_IMAGE_DIR: ${{ matrix.image_dir }}
       SMOKE_API: ${{ matrix.api }}
@@ -42,6 +39,14 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           persist-credentials: false
+
+      - name: Set disposable Android directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'ANDROID_USER_HOME=%s/offline-android\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'ANDROID_EMULATOR_HOME=%s/offline-android\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'ANDROID_AVD_HOME=%s/offline-avd\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
 
       - name: Require existing KVM access
         shell: bash
@@ -185,7 +190,7 @@ jobs:
             timeout 10 "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" emu kill || true
             kill "$(cat "$RUNNER_TEMP/offline-emulator.pid")" 2>/dev/null || true
           fi
-          rm -rf -- "$ANDROID_AVD_HOME" "$ANDROID_USER_HOME" "$RUNNER_TEMP/offline-apks"
+          rm -rf -- "$RUNNER_TEMP/offline-avd" "$RUNNER_TEMP/offline-android" "$RUNNER_TEMP/offline-apks"
           rm -f -- "$RUNNER_TEMP/target-certificate.txt" "$RUNNER_TEMP/test-certificate.txt"
 
       - name: Keep only small allowlisted reports

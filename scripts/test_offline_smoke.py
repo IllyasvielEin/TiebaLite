@@ -85,6 +85,14 @@ class OfflineSmokeGuards(unittest.TestCase):
             with self.assertRaises(ValueError):
                 verify_results(source)
 
+    def test_runner_paths_are_evaluated_in_steps_not_job_env(self):
+        source = (ROOT / ".github/workflows/emulator.yml").read_text()
+        self.assertNotIn("runner.temp", source.split("    steps:", 1)[0])
+        for name in ("ANDROID_USER_HOME", "ANDROID_EMULATOR_HOME", "ANDROID_AVD_HOME"):
+            self.assertIn("printf '" + name + "=%s/", source)
+        self.assertIn('>> "$GITHUB_ENV"', source)
+        self.assertIn('rm -rf -- "$RUNNER_TEMP/offline-avd"', source)
+
     def test_workflow_security_and_order(self):
         source = (ROOT / ".github/workflows/emulator.yml").read_text()
         self.assertIn("workflow_dispatch:", source)
