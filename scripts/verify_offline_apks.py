@@ -9,15 +9,23 @@ from pathlib import Path
 
 APPLICATION_ID = "io.github.illyasvielein.tiebalite"
 HOST = "com.huanchengfly.tieba.post.smoke.SmokeActivity"
+ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"
 
 
 def parse_manifest_dump(text):
     """Parse official aapt2's indented XML tree; bind attributes to their actual element."""
     roots, stack = [], []
+    namespaces = {}
     for line in text.splitlines():
         if not line.strip():
             continue
-        if re.fullmatch(r"\s*N: [^=\s]+=\S+(?: \(line=\d+\))?", line):
+        namespace = re.fullmatch(r"\s*N: ([A-Za-z_][A-Za-z0-9_.-]*)=(\S+)(?: \(line=\d+\))?", line)
+        if namespace:
+            prefix, uri = namespace[1], namespace[2]
+            if ((prefix == "android" and uri != ANDROID_NAMESPACE) or
+                    (prefix in namespaces and namespaces[prefix] != uri)):
+                raise ValueError("Unexpected or rebound packaged manifest namespace")
+            namespaces[prefix] = uri
             continue
         element = re.fullmatch(r"( *)E: ([A-Za-z_][A-Za-z0-9_.:-]*)(?: \(line=\d+\))?", line)
         if element:
@@ -28,10 +36,22 @@ def parse_manifest_dump(text):
             (stack[-1][1]["children"] if stack else roots).append(node)
             stack.append((indent, node))
             continue
-        attribute = re.fullmatch(r"( *)A: ([A-Za-z_][A-Za-z0-9_.:-]*)(?:\(0x[0-9a-fA-F]+\))?=(.+)", line)
+        attribute = re.fullmatch(r"( *)A: ([^\s()=]+)(?:\(0x[0-9a-fA-F]+\))?=(.+)", line)
         if not attribute or not stack or len(attribute[1]) <= stack[-1][0]:
             raise ValueError("Malformed aapt2 manifest tree")
         key, value = attribute[2], attribute[3]
+        if ":" in key:
+            namespace, local = key.rsplit(":", 1)
+            # aapt2 36 emits expanded URI names; older dumps can use a declared prefix.
+            # Normalize only the exact Android URI, never any key merely ending in :name.
+            if (namespace != ANDROID_NAMESPACE and
+                    namespaces.get(namespace) != ANDROID_NAMESPACE):
+                raise ValueError("Unexpected packaged manifest attribute namespace")
+            key = "android:" + local
+        else:
+            local = key
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]*", local):
+            raise ValueError("Malformed packaged manifest attribute name")
         attrs = stack[-1][1]["attrs"]
         if key in attrs:
             raise ValueError("Duplicate packaged manifest attribute")
@@ -88,7 +108,7 @@ def main():
     parser.add_argument("--reports", required=True, type=Path)
     args = parser.parse_args()
     args.reports.mkdir(parents=True, exist_ok=True)
-    records = []
+    inspected = []
     for role, apk in (("target", args.target), ("test", args.test)):
         dumps = {}
         for name, command in (("permissions", ["permissions"]), ("badging", ["badging"]),
@@ -96,6 +116,11 @@ def main():
             dumps[name] = subprocess.run([str(args.aapt2), "dump", *command, str(apk)],
                                          check=True, capture_output=True, text=True, timeout=30).stdout
             (args.reports / f"{role}-{name}.txt").write_text(dumps[name])
+        inspected.append((role, apk, dumps))
+    # Retain both diagnostic trees even if one APK fails the subsequent safety gate.
+    # No APK is installed here; the caller may continue only after all checks succeed.
+    records = []
+    for role, apk, dumps in inspected:
         package = verify_dumps(role, **dumps)
         records.append({"role": role, "package": package, "internet_permission": False,
                         "sha256": hashlib.sha256(apk.read_bytes()).hexdigest()})
