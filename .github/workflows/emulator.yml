@@ -86,6 +86,7 @@ jobs:
           sdk = Path(os.environ['ANDROID_HOME'])
           records = []
           for name, directory in [('emulator', sdk / 'emulator'),
+                                  ('platform-tools', sdk / 'platform-tools'),
                                   (os.environ['SMOKE_IMAGE'], sdk / 'system-images' / os.environ['SMOKE_IMAGE_DIR'])]:
               root = ET.parse(directory / 'package.xml').getroot()
               local = next(e for e in root.iter() if e.tag.rsplit('}', 1)[-1] == 'localPackage')
@@ -119,6 +120,7 @@ jobs:
           set -euo pipefail
           python3 scripts/test_offline_smoke.py
           python3 scripts/test_emulator_storage.py
+          python3 scripts/test_offline_install.py
           python3 scripts/test_kvm_access.py
           python3 app/src/test/compatibility/check_image_picker.py
           ./gradlew --no-daemon --console=plain --stacktrace -PofflineSmoke=true :app:assembleSmoke :app:assembleSmokeAndroidTest
@@ -187,8 +189,8 @@ jobs:
           "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" shell input keyevent 82
           printf 'API=%s\nIMAGE=%s\n' "$actual_api" "$SMOKE_IMAGE" > out/smoke-reports/device.txt
 
-      - name: Install verified APKs and run all ten bounded smoke cases
-        timeout-minutes: 12
+      - name: Verify APK hashes and measured guest capacity
+        timeout-minutes: 2
         shell: bash
         run: |
           set -euo pipefail
@@ -197,8 +199,22 @@ jobs:
           python3 scripts/check_emulator_storage.py guest \
             --apks "$RUNNER_TEMP/offline-apks" --adb "$adb" --serial "$ANDROID_SERIAL" \
             --report out/smoke-reports/storage-guest.json
-          "$adb" -s "$ANDROID_SERIAL" install -t "$RUNNER_TEMP/offline-apks/target.apk"
-          "$adb" -s "$ANDROID_SERIAL" install -t "$RUNNER_TEMP/offline-apks/test.apk"
+      - name: Check package readiness and install verified APKs once
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          adb="$ANDROID_HOME/platform-tools/adb"
+          python3 scripts/install_offline_apks.py \
+            --apks "$RUNNER_TEMP/offline-apks" --adb "$adb" --serial "$ANDROID_SERIAL" \
+            --report out/smoke-reports/install-diagnostics.json
+
+      - name: Run all eleven bounded offline smoke cases
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          adb="$ANDROID_HOME/platform-tools/adb"
           timeout --signal=TERM 10m "$adb" -s "$ANDROID_SERIAL" shell am instrument -w -r \
             -e package com.huanchengfly.tieba.post.smoke -e timeout_msec 45000 \
             io.github.illyasvielein.tiebalite.test/androidx.test.runner.AndroidJUnitRunner \
@@ -258,11 +274,11 @@ jobs:
           root.mkdir(parents=True, exist_ok=True)
           allowed = {'sdk-versions.json', 'acceleration.txt', 'device.txt', 'apk-verification.json',
                      'summary.json', 'instrumentation.txt', 'kvm-diagnostics.json', 'kvm-restoration.json', 'device-profile.txt',
-                     'storage-host.json', 'storage-guest.json'}
+                     'storage-host.json', 'storage-guest.json', 'install-diagnostics.json'}
           allowed.update(f'{role}-{kind}.txt' for role in ('target', 'test')
                          for kind in ('permissions', 'badging', 'manifest'))
           for file in root.iterdir():
-              if file.is_file() and (file.name not in allowed or file.stat().st_size > (4096 if file.name.startswith(('kvm-', 'storage-')) else 2 * 1024 * 1024)):
+              if file.is_file() and (file.name not in allowed or file.stat().st_size > (4096 if file.name.startswith(('kvm-', 'storage-', 'install-')) else 2 * 1024 * 1024)):
                   file.unlink()
           # No logcat, screenshots, credentials, raw emulator logs, APKs or AVD/userdata dumps.
           PY

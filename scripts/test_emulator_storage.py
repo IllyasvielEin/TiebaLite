@@ -289,7 +289,7 @@ class StorageChecks(unittest.TestCase):
         self.assertIn(f"-partition-size {storage.PARTITION_MIB}", source)
         self.assertLess(source.index("check_emulator_storage.py host"), source.index("kvm_access.py acquire"))
         self.assertLess(source.index("sha256sum -c SHA256SUMS"), source.index("check_emulator_storage.py guest"))
-        self.assertLess(source.index("check_emulator_storage.py guest"), source.index("install -t"))
+        self.assertLess(source.index("check_emulator_storage.py guest"), source.index("install_offline_apks.py"))
         self.assertIn("python3 scripts/test_emulator_storage.py", source)
         self.assertIn("storage-host.json", source)
         self.assertIn("storage-guest.json", source)
