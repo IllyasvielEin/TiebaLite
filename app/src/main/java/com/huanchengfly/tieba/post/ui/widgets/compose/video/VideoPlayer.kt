@@ -1,6 +1,5 @@
 package com.huanchengfly.tieba.post.ui.widgets.compose.video
 
-import android.os.Build
 import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.LocalIndication
@@ -140,23 +139,14 @@ fun rememberVideoPlayerController(
     }
     DisposableEffect(controller, lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP ||
-                (Build.VERSION.SDK_INT <= Build.VERSION_CODES.M && event == Lifecycle.Event.ON_PAUSE)
-            ) {
+            if (event == Lifecycle.Event.ON_STOP) {
                 controller.setForeground(false)
-            } else if (event == Lifecycle.Event.ON_RESUME ||
-                (Build.VERSION.SDK_INT > Build.VERSION_CODES.M && event == Lifecycle.Event.ON_START)
-            ) {
+            } else if (event == Lifecycle.Event.ON_RESUME || event == Lifecycle.Event.ON_START) {
                 controller.setForeground(true)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        val activeState = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) {
-            Lifecycle.State.RESUMED
-        } else {
-            Lifecycle.State.STARTED
-        }
-        controller.setForeground(lifecycleOwner.lifecycle.currentState.isAtLeast(activeState))
+        controller.setForeground(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
         }

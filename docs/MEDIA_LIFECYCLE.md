@@ -23,14 +23,14 @@ background playback service, change application identity/signing, or install an 
   detaches both surfaces, removes the listener, and releases only existing engines.
   `PlaybackResource` forbids implicit creation after release. Initialization is an
   explicit operation.
-- A stopped video lifecycle pauses playback and blocks delayed play/seek actions.
-  API23 also pauses at `ON_PAUSE`. Returning to the foreground permits user playback
-  without auto-resuming. The engine remains owned by the composition until final
+- On the supported API35+ range, `ON_STOP` pauses video and blocks delayed play/seek
+  actions. `ON_START`/`ON_RESUME` permit user playback, and initial foreground state
+  uses the `STARTED` threshold. Returning to the foreground does not auto-resume. The engine remains owned by the composition until final
   disposal; this is foreground-only playback, not a background playback service.
 - Voice `Manager` owns one application-context engine. A row only binds by object
   identity. Disposing a different or previous row cannot release the current row.
   View detach/final release and the owning Activity's stop release the active
-  binding. API23 also releases on pause.
+  binding. The unreachable API23 pause-only release branch has been removed.
 - Voice playback has one main-thread progress job, running only while playing.
   There are no per-row timers or wrappers retaining released shared engines.
 
@@ -43,7 +43,7 @@ python3 scripts/test_media_lifecycle.py -v
 python3 app/src/test/compatibility/check_compose_compatibility.py -v
 ```
 
-The media script includes five source-wiring checks and one executable Java harness
+The media script includes seven source-wiring checks and one executable Java harness
 covering ten ownership/resource/source-identity scenarios. It needs a JDK, but no Android SDK,
 device, account, or network. The same ten scenarios have JUnit wrappers for the
 normal Gradle test suite.

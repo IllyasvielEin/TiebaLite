@@ -1,5 +1,6 @@
 """Offline media ownership assertions and source guards, not Android/Compose runtime validation."""
 import pathlib
+import re
 import shutil
 import subprocess
 import tempfile
@@ -78,12 +79,34 @@ class MediaWiringTest(unittest.TestCase):
         self.assertIn('view.player = null', surface)
         source = (VIDEO / 'VideoPlayer.kt').read_text()
         self.assertIn('Lifecycle.Event.ON_STOP', source)
-        self.assertIn('Lifecycle.Event.ON_PAUSE', source)
+        self.assertNotIn('Lifecycle.Event.ON_PAUSE', source)
+        self.assertIn('Lifecycle.Event.ON_START', source)
+        self.assertIn('Lifecycle.Event.ON_RESUME', source)
+        self.assertIn('currentState.isAtLeast(Lifecycle.State.STARTED)', source)
         self.assertIn('controller.setForeground(false)', source)
         self.assertIn('controller.setForeground(true)', source)
         controller = (VIDEO / 'DefaultVideoPlayerController.kt').read_text()
         self.assertIn('if (!isForeground) pause()', controller)
         self.assertIn('if (released.get() || !foreground) return', controller)
+
+    def test_min35_media_branches_preserve_supported_lifecycle(self):
+        build = (ROOT / 'app/build.gradle.kts').read_text()
+        min_sdk = re.search(r'minSdk\s*=\s*(\d+)', build)
+        self.assertIsNotNone(min_sdk)
+        self.assertGreaterEqual(int(min_sdk.group(1)), 35)
+        base = (JAVA / 'activities/BaseActivity.kt').read_text()
+        pause = base.split('override fun onPause()', 1)[1].split('override fun ', 1)[0]
+        stop = base.split('override fun onStop()', 1)[1].split('open val ', 1)[0]
+        self.assertIn('isActivityRunning = false', pause)
+        self.assertNotIn('VoicePlayerView.Manager.releaseForContext', pause)
+        self.assertIn('VoicePlayerView.Manager.releaseForContext(this)', stop)
+        voice = (JAVA / 'ui/widgets/VoicePlayerView.kt').read_text()
+        self.assertIn('foreground = ContextCompat.getDrawable(context, R.drawable.fg_ripple_radius_50dp)', voice)
+        video = (VIDEO / 'VideoPlayer.kt').read_text()
+        for source in (base, voice, video):
+            self.assertNotIn('Build.VERSION.SDK_INT', source)
+            self.assertNotIn('import android.os.Build', source)
+
 
 
 @unittest.skipUnless(shutil.which('java'), 'JDK needed for pure playback ownership tests')
