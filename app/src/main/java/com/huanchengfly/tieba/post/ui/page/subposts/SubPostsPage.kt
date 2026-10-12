@@ -51,6 +51,7 @@ import com.huanchengfly.tieba.post.arch.collectPartialAsState
 import com.huanchengfly.tieba.post.arch.onEvent
 import com.huanchengfly.tieba.post.arch.pageViewModel
 import com.huanchengfly.tieba.post.arch.wrapImmutable
+import com.huanchengfly.tieba.post.security.PublicationPolicy
 import com.huanchengfly.tieba.post.ui.common.theme.compose.ExtendedTheme
 import com.huanchengfly.tieba.post.ui.common.theme.compose.threadBottomBar
 import com.huanchengfly.tieba.post.ui.page.LocalNavigator
@@ -340,7 +341,7 @@ internal fun SubPostsContent(
                 )
             },
             bottomBar = {
-                if (account != null && !LocalContext.current.appPreferences.hideReply) {
+                if (account != null && PublicationPolicy.enabled && !LocalContext.current.appPreferences.hideReply) {
                     Column(
                         modifier = Modifier.background(ExtendedTheme.colors.threadBottomBar)
                     ) {
@@ -617,7 +618,7 @@ private fun SubPostItem(
                     }
                 }
                 if (account != null) {
-                    if (!context.appPreferences.hideReply) {
+                    if (PublicationPolicy.enabled && !context.appPreferences.hideReply) {
                         DropdownMenuItem(
                             onClick = {
                                 onReplyClick(subPost.get())
@@ -653,7 +654,8 @@ private fun SubPostItem(
                     }
                 }
             },
-            onClick = { onReplyClick(subPost.get()) }.takeUnless { context.appPreferences.hideReply || account == null }
+            // Keep long-press actions without turning a reading tap into a reply.
+            onClick = null
         ) {
             Card(
                 header = {

@@ -22,8 +22,10 @@ import com.huanchengfly.tieba.post.arch.UiIntent
 import com.huanchengfly.tieba.post.arch.UiState
 import com.huanchengfly.tieba.post.components.ImageUploader
 import com.huanchengfly.tieba.post.repository.AddPostRepository
+import com.huanchengfly.tieba.post.security.PublicationPolicy
 import com.huanchengfly.tieba.post.utils.FileUtil
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -36,7 +38,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
-import javax.inject.Inject
 
 enum class ReplyPanelType {
     NONE,
@@ -109,6 +110,9 @@ class ReplyViewModel @Inject constructor() :
             )
 
         private fun ReplyUiIntent.Send.producePartialChange(): Flow<ReplyPartialChange.Send> {
+            if (!PublicationPolicy.enabled) {
+                return flowOf(ReplyPartialChange.Send.Failure(-1, PublicationPolicy.DISABLED_MESSAGE))
+            }
             if (forumId != 0L && threadId == 0L ) {
                 val threadTitle = title.orEmpty()
                 return AddPostRepository
@@ -165,8 +169,11 @@ class ReplyViewModel @Inject constructor() :
                 }
         }
 
-        private fun ReplyUiIntent.UploadImages.producePartialChange() =
-            ImageUploader(forumName)
+        private fun ReplyUiIntent.UploadImages.producePartialChange(): Flow<ReplyPartialChange.UploadImages> {
+            if (!PublicationPolicy.enabled) {
+                return flowOf(ReplyPartialChange.UploadImages.Failure(-1, PublicationPolicy.DISABLED_MESSAGE))
+            }
+            return ImageUploader(forumName)
                 .uploadImages(
                     imageUris.map {
                         FileUtil.getRealPathFromUri(
@@ -188,6 +195,8 @@ class ReplyViewModel @Inject constructor() :
                         )
                     )
                 }
+
+        }
 
         private fun ReplyUiIntent.SwitchPanel.producePartialChange() =
             flowOf(ReplyPartialChange.SwitchPanel(panelType))

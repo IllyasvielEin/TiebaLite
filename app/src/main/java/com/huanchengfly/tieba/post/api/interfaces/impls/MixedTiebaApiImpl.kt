@@ -1,5 +1,6 @@
 package com.huanchengfly.tieba.post.api.interfaces.impls
 
+import com.huanchengfly.tieba.post.security.PublicationPolicy
 import android.os.Build
 import android.text.TextUtils
 import com.huanchengfly.tieba.post.App
@@ -773,6 +774,7 @@ object MixedTiebaApiImpl : ITiebaApi {
         )
 
     override fun webUploadPic(photoInfoBean: PhotoInfoBean): Call<WebUploadPicBean> {
+        PublicationPolicy.requireEnabled()
         var base64: String? = null
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             base64 = ImageUtil.imageToBase64(photoInfoBean.file)
@@ -803,8 +805,9 @@ object MixedTiebaApiImpl : ITiebaApi {
         nickName: String,
         pn: String,
         bsk: String
-    ): Call<WebReplyResultBean> =
-        RetrofitTiebaApi.WEB_TIEBA_API.webReply(
+    ): Call<WebReplyResultBean> {
+        PublicationPolicy.requireEnabled()
+        return RetrofitTiebaApi.WEB_TIEBA_API.webReply(
             content = content,
             imgInfo = imgInfo ?: "",
             forumId = forumId,
@@ -815,6 +818,7 @@ object MixedTiebaApiImpl : ITiebaApi {
             bsk = bsk,
             referer = "https://tieba.baidu.com/p/$threadId?lp=5028&mo_device=1&is_jingpost=0&pn=$pn&"
         )
+    }
 
     override fun webReply(
         forumId: String,
@@ -828,8 +832,9 @@ object MixedTiebaApiImpl : ITiebaApi {
         floor: String,
         pn: String,
         bsk: String
-    ): Call<WebReplyResultBean> =
-        RetrofitTiebaApi.WEB_TIEBA_API.webReply(
+    ): Call<WebReplyResultBean> {
+        PublicationPolicy.requireEnabled()
+        return RetrofitTiebaApi.WEB_TIEBA_API.webReply(
             content = content,
             imgInfo = imgInfo ?: "",
             forumId = forumId,
@@ -842,6 +847,7 @@ object MixedTiebaApiImpl : ITiebaApi {
             bsk = bsk,
             referer = "https://tieba.baidu.com/p/$threadId?lp=5028&mo_device=1&is_jingpost=0&pn=$pn&"
         )
+    }
 
     override fun webReply(
         forumId: String,
@@ -856,8 +862,9 @@ object MixedTiebaApiImpl : ITiebaApi {
         floor: String,
         pn: String,
         bsk: String
-    ): Call<WebReplyResultBean> =
-        RetrofitTiebaApi.WEB_TIEBA_API.webReply(
+    ): Call<WebReplyResultBean> {
+        PublicationPolicy.requireEnabled()
+        return RetrofitTiebaApi.WEB_TIEBA_API.webReply(
             content = content,
             imgInfo = imgInfo ?: "",
             forumId = forumId,
@@ -871,6 +878,7 @@ object MixedTiebaApiImpl : ITiebaApi {
             bsk = bsk,
             referer = "https://tieba.baidu.com/p/$threadId?lp=5028&mo_device=1&is_jingpost=0&pn=$pn&"
         )
+    }
 
     override fun webReplyAsync(
         forumId: String,
@@ -882,8 +890,9 @@ object MixedTiebaApiImpl : ITiebaApi {
         nickName: String,
         pn: String,
         bsk: String
-    ): Deferred<ApiResult<WebReplyResultBean>> =
-        RetrofitTiebaApi.WEB_TIEBA_API.webReplyAsync(
+    ): Deferred<ApiResult<WebReplyResultBean>> {
+        PublicationPolicy.requireEnabled()
+        return RetrofitTiebaApi.WEB_TIEBA_API.webReplyAsync(
             content = content,
             imgInfo = imgInfo ?: "",
             forumId = forumId,
@@ -894,6 +903,7 @@ object MixedTiebaApiImpl : ITiebaApi {
             bsk = bsk,
             referer = "https://tieba.baidu.com/p/$threadId?lp=5028&mo_device=1&is_jingpost=0&pn=$pn&"
         )
+    }
 
     override fun webReplyAsync(
         forumId: String,
@@ -907,8 +917,9 @@ object MixedTiebaApiImpl : ITiebaApi {
         floor: String,
         pn: String,
         bsk: String
-    ): Deferred<ApiResult<WebReplyResultBean>> =
-        RetrofitTiebaApi.WEB_TIEBA_API.webReplyAsync(
+    ): Deferred<ApiResult<WebReplyResultBean>> {
+        PublicationPolicy.requireEnabled()
+        return RetrofitTiebaApi.WEB_TIEBA_API.webReplyAsync(
             content = content,
             imgInfo = imgInfo ?: "",
             forumId = forumId,
@@ -921,6 +932,7 @@ object MixedTiebaApiImpl : ITiebaApi {
             bsk = bsk,
             referer = "https://tieba.baidu.com/p/$threadId?lp=5028&mo_device=1&is_jingpost=0&pn=$pn&"
         )
+    }
 
     override fun webReplyAsync(
         forumId: String,
@@ -935,8 +947,9 @@ object MixedTiebaApiImpl : ITiebaApi {
         floor: String,
         pn: String,
         bsk: String
-    ): Deferred<ApiResult<WebReplyResultBean>> =
-        RetrofitTiebaApi.WEB_TIEBA_API.webReplyAsync(
+    ): Deferred<ApiResult<WebReplyResultBean>> {
+        PublicationPolicy.requireEnabled()
+        return RetrofitTiebaApi.WEB_TIEBA_API.webReplyAsync(
             content = content,
             imgInfo = imgInfo ?: "",
             forumId = forumId,
@@ -950,7 +963,7 @@ object MixedTiebaApiImpl : ITiebaApi {
             bsk = bsk,
             referer = "https://tieba.baidu.com/p/$threadId?lp=5028&mo_device=1&is_jingpost=0&pn=$pn&"
         )
-
+    }
 
     override fun webForumPage(
         forumName: String,
@@ -1268,6 +1281,7 @@ object MixedTiebaApiImpl : ITiebaApi {
         subPostId: String?,
         replyUserId: String?
     ): Flow<AddPostResponse> {
+        PublicationPolicy.requireEnabled()
         return RetrofitTiebaApi.OFFICIAL_PROTOBUF_TIEBA_POST_API
             .addPostFlow(
                 buildProtobufRequestBody(
@@ -1618,8 +1632,9 @@ object MixedTiebaApiImpl : ITiebaApi {
         title: String,
         isHide: Int,
         isTitle: Int
-    ): Flow<AddThreadResponse> =
-        RetrofitTiebaApi.OFFICIAL_PROTOBUF_TIEBA_POST_API
+    ): Flow<AddThreadResponse> {
+        PublicationPolicy.requireEnabled()
+        return RetrofitTiebaApi.OFFICIAL_PROTOBUF_TIEBA_POST_API
             .addThreadFlow(
                 buildProtobufRequestBody(
                     AddThreadRequest(
@@ -1650,6 +1665,7 @@ object MixedTiebaApiImpl : ITiebaApi {
                     clientVersion = ClientVersion.TIEBA_V12_POST
                 )
             )
+    }
 
     override fun setUserBlackFlow(
         blackUid: Long,

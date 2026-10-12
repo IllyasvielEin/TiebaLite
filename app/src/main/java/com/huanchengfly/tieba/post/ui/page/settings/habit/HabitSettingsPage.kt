@@ -23,15 +23,16 @@ import androidx.compose.material.icons.outlined.WatchLater
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.huanchengfly.tieba.post.R
 import com.huanchengfly.tieba.post.dataStore
+import com.huanchengfly.tieba.post.security.PublicationPolicy
 import com.huanchengfly.tieba.post.ui.common.prefs.PrefsScreen
 import com.huanchengfly.tieba.post.ui.common.prefs.widgets.ListPref
 import com.huanchengfly.tieba.post.ui.common.prefs.widgets.ListPrefInt
@@ -316,33 +317,35 @@ fun HabitSettingsPage(
                     },
                 )
             }
-            prefsItem {
-                SwitchPref(
-                    key = "postOrReplyWarning",
-                    title = stringResource(id = R.string.title_post_or_reply_warning),
-                    defaultChecked = true,
-                ) {
-                    LeadingIcon {
-                        AvatarIcon(
-                            icon = Icons.Outlined.SecurityUpdateWarning,
-                            size = Sizes.Small,
-                            contentDescription = null,
-                        )
+            if (PublicationPolicy.enabled) {
+                prefsItem {
+                    SwitchPref(
+                        key = "postOrReplyWarning",
+                        title = stringResource(id = R.string.title_post_or_reply_warning),
+                        defaultChecked = true,
+                    ) {
+                        LeadingIcon {
+                            AvatarIcon(
+                                icon = Icons.Outlined.SecurityUpdateWarning,
+                                size = Sizes.Small,
+                                contentDescription = null,
+                            )
+                        }
                     }
                 }
-            }
-            prefsItem {
-                SwitchPref(
-                    key = "hideReply",
-                    title = stringResource(id = R.string.title_hide_reply),
-                    defaultChecked = false,
-                ) {
-                    LeadingIcon {
-                        AvatarIcon(
-                            icon = Icons.Outlined.SpeakerNotesOff,
-                            size = Sizes.Small,
-                            contentDescription = null,
-                        )
+                prefsItem {
+                    SwitchPref(
+                        key = "hideReply",
+                        title = stringResource(id = R.string.title_hide_reply),
+                        defaultChecked = false,
+                    ) {
+                        LeadingIcon {
+                            AvatarIcon(
+                                icon = Icons.Outlined.SpeakerNotesOff,
+                                size = Sizes.Small,
+                                contentDescription = null,
+                            )
+                        }
                     }
                 }
             }

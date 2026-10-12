@@ -36,6 +36,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Badge
 import androidx.compose.material.BadgedBox
@@ -74,7 +75,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
@@ -93,6 +93,7 @@ import com.huanchengfly.tieba.post.arch.onGlobalEvent
 import com.huanchengfly.tieba.post.arch.pageViewModel
 import com.huanchengfly.tieba.post.models.database.Draft
 import com.huanchengfly.tieba.post.pxToDpFloat
+import com.huanchengfly.tieba.post.security.PublicationPolicy
 import com.huanchengfly.tieba.post.toMD5
 import com.huanchengfly.tieba.post.toastShort
 import com.huanchengfly.tieba.post.ui.common.theme.compose.ExtendedTheme
@@ -123,6 +124,8 @@ import com.huanchengfly.tieba.post.utils.showKeyboard
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.spec.DestinationStyleBottomSheet
+import java.util.UUID
+import kotlin.math.max
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.Dispatchers
@@ -132,8 +135,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
-import java.util.UUID
-import kotlin.math.max
 
 data class ReplyArgs(
     val forumId: Long,
@@ -199,6 +200,17 @@ internal fun ReplyPageContent(
     tbs: String? = null,
     isDialog: Boolean = false,
 ) {
+    // Also covers restored navigation and nested-reply dialogs before reading a draft,
+    // account information, or attaching a photo picker / composer side effect.
+    if (!PublicationPolicy.enabled) {
+        Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
+            Text(text = PublicationPolicy.DISABLED_MESSAGE)
+            androidx.compose.material.TextButton(onClick = onBack) {
+                Text(text = stringResource(R.string.btn_close))
+            }
+        }
+        return
+    }
     val hash = remember(forumId, threadId, postId, subPostId) {
         "${threadId}_${postId}_${subPostId}".toMD5()
     }

@@ -69,8 +69,8 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -97,6 +97,7 @@ import com.huanchengfly.tieba.post.dataStore
 import com.huanchengfly.tieba.post.getInt
 import com.huanchengfly.tieba.post.models.ForumHistoryExtra
 import com.huanchengfly.tieba.post.models.database.History
+import com.huanchengfly.tieba.post.security.PublicationPolicy
 import com.huanchengfly.tieba.post.toastShort
 import com.huanchengfly.tieba.post.ui.common.theme.compose.ExtendedTheme
 import com.huanchengfly.tieba.post.ui.page.LocalNavigator
@@ -139,14 +140,14 @@ import com.huanchengfly.tieba.post.utils.requestPinShortcut
 import com.ramcosta.composedestinations.annotation.DeepLink
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlin.math.absoluteValue
+import kotlin.math.max
+import kotlin.math.min
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import kotlin.math.absoluteValue
-import kotlin.math.max
-import kotlin.math.min
 
 
 private val LoadDistance = 70.dp
@@ -567,7 +568,9 @@ fun ForumPage(
     onGlobalEvent<ForumThreadListUiEvent.AddThread>(
         filter = { it.forumName == forumName },
     ) {
-        if (account == null) {
+        if (!PublicationPolicy.enabled) {
+            context.toastShort(PublicationPolicy.DISABLED_MESSAGE)
+        } else if (account == null) {
             context.toastShort(R.string.title_not_logged_in)
         } else if (forumInfo != null) {
             navigator.navigate(
@@ -663,7 +666,8 @@ fun ForumPage(
                     )
                 },
                 floatingActionButton = {
-                    if (context.appPreferences.forumFabFunction != "hide" || (context.appPreferences.hideReply == true && context.appPreferences.forumFabFunction == "post")) {
+                    if (context.appPreferences.forumFabFunction in listOf("refresh", "back_to_top") ||
+                        (PublicationPolicy.enabled && context.appPreferences.forumFabFunction == "post" && !context.appPreferences.hideReply)) {
                         FloatingActionButton(
                             onClick = {
                                 when (context.appPreferences.forumFabFunction) {

@@ -120,11 +120,12 @@ import com.huanchengfly.tieba.post.arch.pageViewModel
 import com.huanchengfly.tieba.post.arch.wrapImmutable
 import com.huanchengfly.tieba.post.models.ThreadHistoryInfoBean
 import com.huanchengfly.tieba.post.models.database.History
+import com.huanchengfly.tieba.post.security.PublicationPolicy
 import com.huanchengfly.tieba.post.toJson
 import com.huanchengfly.tieba.post.toastShort
 import com.huanchengfly.tieba.post.ui.common.PbContentRender
-import com.huanchengfly.tieba.post.ui.common.PicContentRender
 import com.huanchengfly.tieba.post.ui.common.PbContentText
+import com.huanchengfly.tieba.post.ui.common.PicContentRender
 import com.huanchengfly.tieba.post.ui.common.PicWaterfallContentRender
 import com.huanchengfly.tieba.post.ui.common.theme.compose.ExtendedTheme
 import com.huanchengfly.tieba.post.ui.common.theme.compose.invertChipBackground
@@ -183,13 +184,13 @@ import com.huanchengfly.tieba.post.utils.appPreferences
 import com.ramcosta.composedestinations.annotation.DeepLink
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlin.concurrent.thread
+import kotlin.math.max
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import kotlin.concurrent.thread
-import kotlin.math.max
 
 private fun getDescText(
     time: Long?,
@@ -1942,7 +1943,7 @@ private fun BottomBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (user.get { is_login } == 1 && !LocalContext.current.appPreferences.hideReply) {
+            if (user.get { is_login } == 1 && PublicationPolicy.enabled && !LocalContext.current.appPreferences.hideReply) {
                 Avatar(
                     data = StringUtil.getAvatarUrl(user.get { portrait }),
                     size = Sizes.Tiny,
@@ -2065,9 +2066,8 @@ fun PostCard(
         LongClickMenu(
             menuState = menuState,
             indication = null,
-            onClick = {
-                onReplyClick(post)
-            }.takeIf { !context.appPreferences.hideReply && account != null },
+            // Reading a floor must never open a composer or its risk warning.
+            onClick = null,
             menuContent = {
                 if (onMenuCopyClick != null) {
                     DropdownMenuItem(
@@ -2082,7 +2082,7 @@ fun PostCard(
                     }
                 }
                 if (account != null) {
-                    if (!context.appPreferences.hideReply) {
+                    if (PublicationPolicy.enabled && !context.appPreferences.hideReply) {
                         DropdownMenuItem(
                             onClick = {
                                 onReplyClick(post)
@@ -2310,7 +2310,7 @@ private fun SubPostItem(
                 }
             }
             if (LocalAccount.current != null) {
-                if (!context.appPreferences.hideReply) {
+                if (PublicationPolicy.enabled && !context.appPreferences.hideReply) {
                     DropdownMenuItem(
                         onClick = {
                             onReplyClick?.invoke(subPostList.get())

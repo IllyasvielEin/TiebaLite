@@ -5,8 +5,11 @@ import com.huanchengfly.tieba.post.api.models.protos.addPost.AddPostResponse
 import com.huanchengfly.tieba.post.api.models.protos.addThread.AddThreadResponse
 import com.huanchengfly.tieba.post.arch.GlobalEvent
 import com.huanchengfly.tieba.post.arch.emitGlobalEvent
+import com.huanchengfly.tieba.post.security.PublicationPolicy
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
@@ -18,8 +21,9 @@ object AddPostRepository {
         title: String? = "",
         isHide: Int? = 1,
         isTitle: Int? = 1
-    ): Flow<AddThreadResponse> =
-        TiebaApi.getInstance()
+    ): Flow<AddThreadResponse> = flow {
+        PublicationPolicy.requireEnabled()
+        emitAll(TiebaApi.getInstance()
             .addThreadFlow(
                 content,
                 forumName,
@@ -40,7 +44,8 @@ object AddPostRepository {
                         GlobalEvent.AddThreadSuccess(threadId, postId, msg)
                     )
                 }
-            }
+            })
+    }
 
     fun addPost(
         content: String,
@@ -52,8 +57,9 @@ object AddPostRepository {
         postId: Long? = null,
         subPostId: Long? = null,
         replyUserId: Long? = null,
-    ): Flow<AddPostResponse> =
-        TiebaApi.getInstance()
+    ): Flow<AddPostResponse> = flow {
+        PublicationPolicy.requireEnabled()
+        emitAll(TiebaApi.getInstance()
             .addPostFlow(
                 content,
                 forumId.toString(),
@@ -82,5 +88,6 @@ object AddPostRepository {
                         emitGlobalEvent(GlobalEvent.ReplySuccess(threadId, newPostId))
                     }
                 }
-            }
+            })
+    }
 }

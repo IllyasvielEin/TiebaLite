@@ -12,9 +12,12 @@ import com.huanchengfly.tieba.post.api.retrofit.body.buildMultipartBody
 import com.huanchengfly.tieba.post.api.retrofit.exception.TiebaException
 import com.huanchengfly.tieba.post.api.retrofit.exception.getErrorCode
 import com.huanchengfly.tieba.post.api.retrofit.exception.getErrorMessage
+import com.huanchengfly.tieba.post.security.PublicationPolicy
 import com.huanchengfly.tieba.post.utils.ImageUtil
 import com.huanchengfly.tieba.post.utils.MD5Util
 import com.huanchengfly.tieba.post.utils.appPreferences
+import java.io.File
+import java.io.RandomAccessFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -28,8 +31,6 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.withContext
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.File
-import java.io.RandomAccessFile
 
 class ImageUploader(
     private val forumName: String,
@@ -50,6 +51,9 @@ class ImageUploader(
         filePaths: List<String>,
         isOriginImage: Boolean = false,
     ): Flow<List<UploadPictureResultBean>> {
+        if (!PublicationPolicy.enabled) {
+            return kotlinx.coroutines.flow.flow { PublicationPolicy.requireEnabled() }
+        }
         return filePaths.asFlow()
             .map { filePath ->
                 uploadSinglePicture(filePath, isOriginImage)
@@ -104,6 +108,7 @@ class ImageUploader(
         filePath: String,
         isOriginImage: Boolean = false,
     ): UploadPictureResultBean {
+        PublicationPolicy.requireEnabled()
         val option = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
         }
