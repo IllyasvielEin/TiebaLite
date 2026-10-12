@@ -28,12 +28,6 @@
         <item name="android:gravity">center</item>
     </style>
 
-    <style name="BottomSheetDialogStyle" parent="Theme.Design.BottomSheetDialog">
-        <item name="android:windowFrame">@null</item>
-        <item name="android:backgroundDimEnabled">true</item>
-        <item name="android:windowAnimationStyle">@style/Animation.Bottom</item>
-    </style>
-
     <style name="Dialog.Bottom" parent="Theme.MaterialComponents.Light.Dialog">
         <item name="android:windowFrame">@null</item>
         <item name="android:windowNoTitle">true</item>

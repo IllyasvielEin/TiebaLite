@@ -14,7 +14,7 @@ OWNED_FILES = (
     'components/transformations/internal/RSBlur.java',
     'components/transformations/internal/SupportRSBlur.java',
     'components/transformations/internal/Utils.java',
-    'fragments/BaseBottomSheetDialogFragment.java', 'fragments/BaseFragment.kt',
+    'fragments/BaseFragment.kt',
     'services/NotifyJobService.kt', 'services/OKSignTileService.java',
     'ui/common/theme/compose/DynamicTonalPalette.kt', 'ui/common/theme/compose/Theme.kt',
     'ui/page/MonetTestPage.kt', 'ui/page/photoview/PhotoViewActivity.kt',
@@ -33,6 +33,21 @@ API_LEVELS = {
 }
 OPERATORS = {'>=': operator.ge, '<=': operator.le, '>': operator.gt,
              '<': operator.lt, '==': operator.eq, '!=': operator.ne}
+# Exact dead closure only. Other live status-bar/reflection paths remain outside this guard.
+REMOVED_SOURCE_FILES = (
+    'utils/KeyEventManager.kt', 'utils/StatusBarUtil.java',
+    'fragments/BaseBottomSheetDialogFragment.java', 'fragments/MenuDialogFragment.java',
+    'interfaces/InitMenuCallback.java',
+)
+REMOVED_REFERENCES = re.compile(
+    rb'\b(?:KeyEventManager(?:Kt)?|bindKeyEvent|StatusBarUtil|BaseBottomSheetDialogFragment|'
+    rb'MenuDialogFragment|InitMenuCallback|BottomSheetDialogStyle)\b'
+)
+REMOVED_HIDDEN_REFLECTION = re.compile(
+    rb'android\.view\.View\.ListenerInfo|\b(?:getListenerInfo|mOnKeyListener|'
+    rb'MiuiWindowManager|EXTRA_FLAG_STATUS_BAR_DARK_MODE|MEIZU_FLAG_DARK_STATUS_BAR_ICON|'
+    rb'meizuFlags)\b'
+)
 
 
 def source(name):
@@ -170,14 +185,32 @@ class MinSdk35Checks(unittest.TestCase):
         self.assertNotIn('DoNothingNestedScrollConnection', ime)
 
     def test_fragment_context_attachment_remains_single_owned_path(self):
-        java = source('fragments/BaseBottomSheetDialogFragment.java')
         kotlin = source('fragments/BaseFragment.kt')
-        self.assertIn('public void onAttach(Context context)', java)
-        self.assertIn('super.onAttach(context);\n        onAttachToContext(context);', java)
         self.assertIn('override fun onAttach(context: Context)', kotlin)
         self.assertIn('super.onAttach(context)\n        onAttachToContext(context)', kotlin)
-        self.assertNotIn('onAttach(Activity activity)', java)
         self.assertNotIn('onAttach(activity: Activity)', kotlin)
+
+    def test_removed_dead_closure_has_no_production_files_or_references(self):
+        for file in REMOVED_SOURCE_FILES:
+            with self.subTest(removed=file):
+                self.assertFalse((JAVA / file).exists())
+        # Include shipping source sets, manifests, resources and all asset bytes, but not
+        # tests/reports that legitimately describe the deleted names or historical findings.
+        production_files = {ROOT / 'app/proguard-rules.pro'}
+        for source_set in (ROOT / 'app/src').iterdir():
+            if not source_set.is_dir() or source_set.name.startswith(('test', 'androidTest')):
+                continue
+            for file in source_set.rglob('*'):
+                if file.is_file() and (file.suffix in ('.kt', '.java', '.xml', '.pro') or
+                                       'assets' in file.relative_to(source_set).parts):
+                    production_files.add(file)
+        for file in sorted(production_files):
+            with self.subTest(file=str(file.relative_to(ROOT))):
+                content = file.read_bytes()
+                self.assertNotRegex(content, REMOVED_REFERENCES)
+                self.assertNotRegex(content, REMOVED_HIDDEN_REFLECTION)
+        # This pre-existing unused layout is intentionally not part of the deletion.
+        self.assertTrue((ROOT / 'app/src/main/res/layout/fragment_menu_dialog.xml').is_file())
 
     def test_platform_cleanup_and_error_fallbacks_are_retained(self):
         for file in ('RSBlur.java', 'SupportRSBlur.java'):
