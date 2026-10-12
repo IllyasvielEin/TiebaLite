@@ -1,5 +1,6 @@
 package com.huanchengfly.tieba.post.ui.widgets.compose.video
 
+import android.os.Build
 import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.LocalIndication
@@ -29,12 +30,12 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.SaverScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -48,8 +49,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.github.panpf.sketch.compose.AsyncImage
 import com.huanchengfly.tieba.post.R
+import com.huanchengfly.tieba.post.ui.widgets.media.PlaybackSourceIdentity
 import com.huanchengfly.tieba.post.ui.widgets.compose.video.util.getDurationString
 
 internal val LocalVideoPlayerController =
@@ -65,22 +70,51 @@ fun rememberVideoPlayerController(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    return rememberSaveable(
-        context, coroutineScope,
-        saver = object : Saver<DefaultVideoPlayerController, VideoPlayerState> {
-            override fun restore(value: VideoPlayerState): DefaultVideoPlayerController {
+    val latestFullScreenListener by rememberUpdatedState(fullScreenModeChangedListener)
+    val listener = remember(fullScreenModeChangedListener != null) {
+        if (fullScreenModeChangedListener == null) null else object : OnFullScreenModeChangedListener {
+            override fun onFullScreenModeChanged(isFullScreen: Boolean) {
+                latestFullScreenListener?.onFullScreenModeChanged(isFullScreen)
+            }
+        }
+    }
+    val sourceIdentity = remember(source) {
+        when (source) {
+            null -> PlaybackSourceIdentity.none()
+            is VideoPlayerSource.Raw -> PlaybackSourceIdentity.forRaw(source.resId)
+            is VideoPlayerSource.Network -> PlaybackSourceIdentity.forNetwork(source.url, source.headers)
+        }
+    }
+    val controller = rememberSaveable(
+        context, coroutineScope, source, fullScreenModeChangedListener != null,
+        saver = object : Saver<DefaultVideoPlayerController, Any> {
+            override fun restore(value: Any): DefaultVideoPlayerController {
+                val saved = value as? SavedVideoPlayerState
+                // Legacy bundles without a source discriminator cannot safely restore progress.
+                val restoredState = if (saved == null) VideoPlayerState() else {
+                    PlaybackSourceIdentity.restoreOrDefault(
+                        saved.sourceIdentity,
+                        sourceIdentity,
+                        saved.state,
+                        VideoPlayerState()
+                    )
+                }
                 return DefaultVideoPlayerController(
                     context = context,
-                    initialState = value.copy(isPlaying = playWhenReady),
+                    initialState = restoredState.copy(thumbnailUrl = thumbnailUrl, isPlaying = playWhenReady),
                     coroutineScope = coroutineScope,
-                    fullScreenModeChangedListener = fullScreenModeChangedListener
+                    fullScreenModeChangedListener = listener
                 ).apply {
                     source?.let { setSource(it) }
                 }
             }
 
-            override fun SaverScope.save(value: DefaultVideoPlayerController): VideoPlayerState {
-                return value.currentState { it }
+            override fun SaverScope.save(value: DefaultVideoPlayerController): SavedVideoPlayerState {
+                return SavedVideoPlayerState(
+                    sourceIdentity = sourceIdentity,
+                    // Obtain the current thumbnail from the caller after restore; do not save its URL.
+                    state = value.currentState { it.copy(thumbnailUrl = null) }
+                )
             }
         },
         init = {
@@ -91,12 +125,43 @@ fun rememberVideoPlayerController(
                     isPlaying = playWhenReady
                 ),
                 coroutineScope = coroutineScope,
-                fullScreenModeChangedListener = fullScreenModeChangedListener
+                fullScreenModeChangedListener = listener
             ).apply {
                 source?.let { setSource(it) }
             }
         }
     )
+    SideEffect { controller.setThumbnail(thumbnailUrl) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // This owner does not move when the surface enters or exits fullscreen.
+    DisposableEffect(controller) {
+        controller.initialize()
+        onDispose { controller.release() }
+    }
+    DisposableEffect(controller, lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP ||
+                (Build.VERSION.SDK_INT <= Build.VERSION_CODES.M && event == Lifecycle.Event.ON_PAUSE)
+            ) {
+                controller.setForeground(false)
+            } else if (event == Lifecycle.Event.ON_RESUME ||
+                (Build.VERSION.SDK_INT > Build.VERSION_CODES.M && event == Lifecycle.Event.ON_START)
+            ) {
+                controller.setForeground(true)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        val activeState = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) {
+            Lifecycle.State.RESUMED
+        } else {
+            Lifecycle.State.STARTED
+        }
+        controller.setForeground(lifecycleOwner.lifecycle.currentState.isAtLeast(activeState))
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+    return controller
 }
 
 @Composable
@@ -117,13 +182,6 @@ fun VideoPlayer(
         videoPlayerController.enableGestures(gesturesEnabled)
     }
 
-//    DisposableEffect(Unit) {
-//        videoPlayerController.initialize()
-//        onDispose {
-//            videoPlayerController.release()
-//        }
-//    }
-    LaunchedEffect(Unit) { videoPlayerController.initialize() }
     CompositionLocalProvider(
         LocalContentColor provides Color.White,
         LocalVideoPlayerController provides videoPlayerController
@@ -152,7 +210,8 @@ fun VideoPlayer(
                 PlayerSurface(
                     modifier = Modifier
                         .aspectRatio(aspectRatio.takeUnless { it.isNaN() || it == 0f } ?: 2f)
-                        .align(Alignment.Center)
+                        .align(Alignment.Center),
+                    onPlayerViewReleased = videoPlayerController::playerViewReleased
                 ) {
                     videoPlayerController.playerViewAvailable(it)
                 }

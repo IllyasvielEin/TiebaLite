@@ -1,7 +1,6 @@
 package com.huanchengfly.tieba.post.ui.widgets.compose
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import com.huanchengfly.tieba.post.ui.widgets.VoicePlayerView
@@ -18,13 +17,11 @@ fun VoicePlayer(
             VoicePlayerView(it)
         },
         update = {
+            if (it.url != url) it.reset()
             it.url = url
             it.duration = duration
-        }
+        },
+        onReset = null,
+        onRelease = { it.release() }
     )
-    DisposableEffect(key1 = url) {
-        onDispose {
-            VoicePlayerView.Manager.release()
-        }
-    }
 }

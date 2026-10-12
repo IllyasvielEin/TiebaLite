@@ -8,6 +8,7 @@ import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.text.TextUtils
 import android.util.DisplayMetrics
@@ -66,6 +67,9 @@ abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity(), ExtraRefres
     override fun onPause() {
         super.onPause()
         isActivityRunning = false
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) {
+            VoicePlayerView.Manager.releaseForContext(this)
+        }
     }
 
     //禁止app字体大小跟随系统字体大小调节
@@ -100,7 +104,7 @@ abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity(), ExtraRefres
 
     override fun onStop() {
         super.onStop()
-        VoicePlayerView.Manager.release()
+        VoicePlayerView.Manager.releaseForContext(this)
     }
 
     open val isNeedImmersionBar: Boolean = true

@@ -1,7 +1,6 @@
 package com.huanchengfly.tieba.post.ui.widgets.compose
 
 import android.content.pm.ActivityInfo
-import android.util.Log
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -50,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -63,6 +63,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.util.fastForEachIndexed
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.eygraber.compose.placeholder.PlaceholderHighlight
 import com.eygraber.compose.placeholder.material.fade
 import com.eygraber.compose.placeholder.material.placeholder
@@ -1057,22 +1059,31 @@ fun VideoPlayer(
     val videoPlayerController = rememberVideoPlayerController(
         source = VideoPlayerSource.Network(videoUrl),
         thumbnailUrl = thumbnailUrl,
-        fullScreenModeChangedListener = object : OnFullScreenModeChangedListener {
-            override fun onFullScreenModeChanged(isFullScreen: Boolean) {
-                Log.i("VideoPlayer", "onFullScreenModeChanged $isFullScreen")
-                systemUIBarsTweaker.tweakStatusBarVisibility(!isFullScreen)
-                systemUIBarsTweaker.tweakNavigationBarVisibility(!isFullScreen)
-                if (isFullScreen) {
-                    context.findActivity()?.requestedOrientation =
-                        ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                } else {
-                    context.findActivity()?.requestedOrientation =
-                        ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                }
+        fullScreenModeChangedListener = remember {
+            object : OnFullScreenModeChangedListener {
+                override fun onFullScreenModeChanged(isFullScreen: Boolean) = Unit
             }
         }
     )
     val fullScreen by (videoPlayerController as DefaultVideoPlayerController).collect { isFullScreen }
+    val view = LocalView.current
+    val activity = context.findActivity()
+    if (fullScreen) {
+        DisposableEffect(activity, view, systemUIBarsTweaker) {
+            val originalOrientation = activity?.requestedOrientation
+            val insets = ViewCompat.getRootWindowInsets(view)
+            val statusBarVisible = insets?.isVisible(WindowInsetsCompat.Type.statusBars()) ?: true
+            val navigationBarVisible = insets?.isVisible(WindowInsetsCompat.Type.navigationBars()) ?: true
+            systemUIBarsTweaker.tweakStatusBarVisibility(false)
+            systemUIBarsTweaker.tweakNavigationBarVisibility(false)
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            onDispose {
+                systemUIBarsTweaker.tweakStatusBarVisibility(statusBarVisible)
+                systemUIBarsTweaker.tweakNavigationBarVisibility(navigationBarVisible)
+                if (originalOrientation != null) activity?.requestedOrientation = originalOrientation
+            }
+        }
+    }
     val videoPlayerContent = remember(videoPlayerController) {
         movableContentOf { isFullScreen: Boolean, playerModifier: Modifier ->
             com.huanchengfly.tieba.post.ui.widgets.compose.video.VideoPlayer(
@@ -1084,32 +1095,10 @@ fun VideoPlayer(
     }
 
     if (fullScreen) {
-        Spacer(
-            modifier = modifier
-        )
-        FullScreen {
-            DisposableEffect(
-                videoPlayerContent(
-                    true,
-                    Modifier.fillMaxSize()
-                )
-            ) {
-                onDispose {
-                    videoPlayerController.release()
-                }
-            }
-        }
+        Spacer(modifier = modifier)
+        FullScreen { videoPlayerContent(true, Modifier.fillMaxSize()) }
     } else {
-        DisposableEffect(
-            videoPlayerContent(
-                false,
-                modifier
-            )
-        ) {
-            onDispose {
-                videoPlayerController.release()
-            }
-        }
+        videoPlayerContent(false, modifier)
     }
 }
 

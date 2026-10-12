@@ -5,9 +5,6 @@ import android.content.res.ColorStateList
 import android.graphics.ColorFilter
 import android.net.Uri
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.Log
 import android.view.MenuItem
@@ -25,45 +22,46 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.airbnb.lottie.LottieAnimationView
 import com.airbnb.lottie.LottieProperty
 import com.airbnb.lottie.SimpleColorFilter
 import com.airbnb.lottie.model.KeyPath
 import com.airbnb.lottie.value.LottieValueCallback
 import com.huanchengfly.tieba.post.R
+import com.huanchengfly.tieba.post.findActivity
+import com.huanchengfly.tieba.post.ui.widgets.media.PlaybackOwner
 import com.huanchengfly.tieba.post.ui.common.theme.utils.ColorStateListUtils
 import com.huanchengfly.tieba.post.ui.common.theme.utils.ThemeUtils
 import com.huanchengfly.tieba.post.utils.DisplayUtil
 import com.huanchengfly.tieba.post.utils.FileUtil
 import com.huanchengfly.tieba.post.utils.PopupUtil
-import java.io.IOException
-import java.util.Timer
-import java.util.TimerTask
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 class VoicePlayerView @JvmOverloads constructor(
     context: Context?,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
-) : RelativeLayout(context, attrs, defStyleAttr), View.OnClickListener, Player.Listener,
+) : RelativeLayout(context, attrs, defStyleAttr), View.OnClickListener,
     OnLongClickListener, PopupMenu.OnMenuItemClickListener {
     private lateinit var time: TextView
     private lateinit var icon: ImageView
     private lateinit var animationView: LottieAnimationView
     private lateinit var progressBar: ProgressBar
 
-    private var timer: Timer? = null
-    private var player: Player? = null
-
     var url: String? = null
 
-    private var hasPrepared = false
     var completed = false
 
-    private var forceReset = false
     var isMini = false
         set(value) {
             field = value
@@ -72,12 +70,11 @@ class VoicePlayerView @JvmOverloads constructor(
     var duration = 0
         set(value) {
             field = value
-            setText(calculateTime(duration / 1000))
+            if (!Manager.isCurrent(this)) setText(calculateTime(duration / 1000))
         }
 
     init {
         initView()
-        initMediaPlayer()
     }
 
     private fun reloadView() {
@@ -143,18 +140,6 @@ class VoicePlayerView @JvmOverloads constructor(
         }
     }
 
-    private fun initMediaPlayer() {
-        if (isInEditMode) {
-            return
-        }
-        if (timer != null) {
-            timer!!.cancel()
-            timer = null
-        }
-        timer = Timer()
-        player = Player(this)
-    }
-
     fun setText(text: String?) {
         time.text = text
     }
@@ -186,35 +171,18 @@ class VoicePlayerView @JvmOverloads constructor(
     }
 
     fun reset() {
-        if (player == null) {
-            initMediaPlayer()
-        } else {
-            try {
-                player!!.reset()
-            } catch (e: IllegalStateException) {
-                e.printStackTrace()
-                player = null
-                initMediaPlayer()
-            }
-        }
-        forceReset = true
-        hasPrepared = false
+        Manager.detach(this)
+        resetUi()
+    }
+
+    private fun resetUi() {
         completed = false
         setState(STATE_PAUSING)
         animationView.visibility = GONE
-        if (timer != null) {
-            timer!!.cancel()
-            timer = null
-        }
-        timer = Timer()
+        setText(calculateTime(duration / 1000))
     }
 
-    fun startPlay() {
-        if (url == null) {
-            throw NullPointerException("Url is null.")
-        }
-        startPlay(url)
-    }
+    fun startPlay() = startPlay(checkNotNull(url) { "Url is null." })
 
     private fun setState(@IconState state: Int) {
         when (state) {
@@ -241,266 +209,198 @@ class VoicePlayerView @JvmOverloads constructor(
     }
 
     fun startPlay(url: String?) {
-        if (url == null) {
-            throw NullPointerException("Url is null.")
-        }
-        Player.notifyReset()
-        try {
-            player!!.reset()
-        } catch (e: IllegalStateException) {
-            e.printStackTrace()
-            player = null
-            initMediaPlayer()
-        }
-        this.url = url
-        forceReset = false
-        hasPrepared = false
-        completed = false
-        try {
-            player!!.setDataSource(url)
-            player!!.prepare()
-            setState(STATE_LOADING)
-        } catch (e: IOException) {
-            e.printStackTrace()
-            Log.e(TAG, "set dataSource error", e)
-        } catch (e: IllegalStateException) {
-            Log.e(TAG, "set dataSource error", e)
-        }
+        val source = checkNotNull(url) { "Url is null." }
+        this.url = source
+        resetUi()
+        Manager.start(this, source)
     }
 
     fun release() {
-        if (timer != null) {
-            timer!!.cancel()
-            timer = null
-        }
-        if (player != null) {
-            player!!.release()
-            player = null
-        }
+        Manager.detach(this)
+        resetUi()
     }
 
-    override fun onClick(v: View) {
-        toggleStatus()
+    override fun onDetachedFromWindow() {
+        release()
+        super.onDetachedFromWindow()
     }
+
+    override fun onClick(v: View) = toggleStatus()
 
     fun toggleStatus() {
-        if (player == null) {
-            initMediaPlayer()
-        }
-        if (!isThisPlaying) {
-            Log.i(TAG, "toggleStatus: startPlay")
-            startPlay()
-        } else if (player!!.isPlaying) {
-            Log.i(TAG, "toggleStatus: pause")
-            pause()
-        } else {
-            Log.i(TAG, "toggleStatus: play")
-            play()
+        when {
+            !Manager.isCurrent(this) || completed -> startPlay()
+            Manager.isPlaying(this) -> Manager.pause(this)
+            else -> play()
         }
     }
 
     fun play() {
-        if (player != null && hasPrepared && !player!!.isPlaying) {
-            if (completed || forceReset) {
-                startPlay()
-                return
-            }
-            player!!.start()
-            setState(STATE_PLAYING)
-        }
-    }
-
-    private val isThisPlaying: Boolean
-        get() = TextUtils.equals(Player.PLAYING_DATA_SOURCE, url)
-
-    private fun pause() {
-        if (player != null && hasPrepared && player!!.isPlaying) {
-            player!!.pause()
-            setState(STATE_PAUSING)
-        }
-    }
-
-    override fun onPlaybackStateChanged(playbackState: Int) {
-        if (playbackState == androidx.media3.common.Player.STATE_READY) {
-            Log.i(TAG, "onPrepared: ")
-            hasPrepared = true
-            animationView.visibility = VISIBLE
-            play()
-            setState(STATE_PLAYING)
-            setText(calculateTime(duration / 1000))
-            timer!!.schedule(object : TimerTask() {
-                override fun run() {
-                    if (!completed) {
-                        Companion.handler.post {
-                            setText(calculateTime((player?.currentPosition ?: 0) / 1000))
-                        }
-                    }
-                }
-            }, 0, 50)
-        } else if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
-            setState(STATE_PAUSING)
-            completed = true
-        }
+        if (Manager.isCurrent(this)) Manager.resume(this) else startPlay()
     }
 
     @IntDef(STATE_LOADING, STATE_PLAYING, STATE_PAUSING)
     @Retention(AnnotationRetention.SOURCE)
     private annotation class IconState
-    abstract class PlayerInterface(protected var voicePlayerView: VoicePlayerView) {
-        abstract fun reset()
 
-        @Throws(IOException::class)
-        abstract fun setDataSource(url: String?)
-        abstract fun prepare()
-        abstract fun stop()
-        abstract fun release()
-        abstract val isPlaying: Boolean
-        abstract fun start()
-        abstract fun pause()
-        abstract fun seekTo(msec: Int)
-        abstract val currentPosition: Int
-        abstract val duration: Int
-    }
+    /** One engine for speech playback; rows only own their binding, never another row's engine. */
+    object Manager : Player.Listener {
+        private val owner = PlaybackOwner<VoicePlayerView>()
+        private var exoPlayer: ExoPlayer? = null
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        private var progressJob: Job? = null
 
-    class Player(voicePlayerView: VoicePlayerView) : PlayerInterface(voicePlayerView) {
-        private val mExoPlayer: ExoPlayer
-        private var dataSource: String? = null
+        fun isCurrent(view: VoicePlayerView): Boolean = owner.owns(view)
 
-        init {
-            mExoPlayer = Manager.getExoPlayer(voicePlayerView.context)
-        }
-
-        override fun reset() {
-            mExoPlayer.stop()
-            PLAYING_DATA_SOURCE = null
-            setCurrent(null)
-        }
+        fun isPlaying(view: VoicePlayerView): Boolean =
+            owner.owns(view) && exoPlayer?.playWhenReady == true
 
         @OptIn(UnstableApi::class)
-        @Throws(IOException::class)
-        override fun setDataSource(url: String?) {
-            mExoPlayer.setMediaSource(
-                DefaultMediaSourceFactory(voicePlayerView.context)
-                    .createMediaSource(
-                        MediaItem.fromUri(url!!)
-                    )
-            )
-            dataSource = url
-            setCurrent(voicePlayerView)
-        }
-
-        override fun prepare() {
-            mExoPlayer.prepare()
-            PLAYING_DATA_SOURCE = dataSource
-            setCurrent(voicePlayerView)
-        }
-
-        private fun setCurrent(current: VoicePlayerView?) {
-            if (current != null) {
-                CURRENT = current
-                Manager.notifyPlaying(CURRENT)
-                mExoPlayer.addListener(CURRENT!!)
-            } else {
-                if (CURRENT != null) mExoPlayer.removeListener(
-                    CURRENT!!
+        private fun getPlayer(context: Context): ExoPlayer {
+            return exoPlayer ?: ExoPlayer.Builder(context.applicationContext)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(C.USAGE_MEDIA)
+                        .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)
+                        .build(), true
                 )
-                CURRENT = null
-            }
-        }
-
-        override fun stop() {
-            mExoPlayer.stop()
-        }
-
-        override fun release() {
-            if (CURRENT != null) CURRENT!!.reset()
-            mExoPlayer.release()
-            PLAYING_DATA_SOURCE = null
-            setCurrent(null)
-        }
-
-        override val isPlaying: Boolean
-            get() = mExoPlayer.isPlaying
-
-        override fun start() {
-            mExoPlayer.play()
-            PLAYING_DATA_SOURCE = dataSource
-            setCurrent(voicePlayerView)
-        }
-
-        override fun pause() {
-            mExoPlayer.pause()
-        }
-
-        override fun seekTo(msec: Int) {
-            mExoPlayer.seekTo(msec.toLong())
-        }
-
-        override val currentPosition: Int
-            get() = mExoPlayer.currentPosition.toInt()
-
-        override val duration: Int
-            get() {
-                return mExoPlayer.duration.toInt()
-            }
-
-        companion object {
-            @JvmStatic
-            var CURRENT: VoicePlayerView? = null
-            var PLAYING_DATA_SOURCE: String? = null
-            fun notifyReset() {
-                if (CURRENT != null) {
-                    CURRENT!!.reset()
+                .setHandleAudioBecomingNoisy(true)
+                .setRenderersFactory(
+                    DefaultRenderersFactory(context.applicationContext)
+                        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+                )
+                .build()
+                .also {
+                    exoPlayer = it
+                    it.addListener(this)
                 }
-            }
-        }
-    }
-
-    object Manager {
-        @JvmStatic
-        private var sExoPlayer: ExoPlayer? = null
-
-        @JvmStatic
-        private var current: VoicePlayerView? = null
-
-        @OptIn(UnstableApi::class)
-        fun getExoPlayer(context: Context): ExoPlayer {
-            if (sExoPlayer == null) {
-                synchronized(Manager::class.java) {
-                    if (sExoPlayer == null) {
-                        sExoPlayer = ExoPlayer.Builder(context)
-                            .setAudioAttributes(
-                                AudioAttributes.Builder()
-                                    .setUsage(C.USAGE_MEDIA)
-                                    .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)
-                                    .build(), true
-                            )
-                            .setHandleAudioBecomingNoisy(true) // 自动暂停播放
-                            .setRenderersFactory(
-                                DefaultRenderersFactory(context).setExtensionRendererMode(
-                                    DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER /* We prefer extensions, such as FFmpeg */
-                                )
-                            )
-                            .build()
-                            .apply { playWhenReady = true }
-                    }
-                }
-            }
-            return sExoPlayer!!
         }
 
-        fun notifyPlaying(voicePlayerView: VoicePlayerView?) {
-            current = voicePlayerView
+        fun start(view: VoicePlayerView, url: String) {
+            stopProgress()
+            // Detach the old UI before stop() can dispatch state changes for the new media.
+            owner.clear()?.resetUi()
+            val player = getPlayer(view.context)
+            player.stop()
+            owner.replace(view)
+            view.completed = false
+            view.setState(STATE_LOADING)
+            player.setMediaItem(MediaItem.fromUri(url))
+            player.playWhenReady = true
+            player.prepare()
+        }
+
+        fun pause(view: VoicePlayerView) {
+            if (!owner.owns(view)) return
+            exoPlayer?.pause()
+            stopProgress()
+            view.setState(STATE_PAUSING)
+        }
+
+        fun resume(view: VoicePlayerView) {
+            if (!owner.owns(view)) return
+            if (view.completed) {
+                start(view, checkNotNull(view.url))
+            } else {
+                exoPlayer?.play()
+            }
+        }
+
+        fun detach(view: VoicePlayerView) {
+            if (!owner.detach(view)) return
+            releasePlayer()
+        }
+
+        /** A stopping Activity cannot release playback started by a different Activity. */
+        fun releaseForContext(context: Context) {
+            val view = owner.get()
+            if (view == null || view.context.findActivity() === context.findActivity()) release()
         }
 
         fun release() {
-            if (current != null) {
-                current!!.release()
-                current = null
-            } else if (sExoPlayer != null) {
-                sExoPlayer!!.release()
+            val previous = owner.clear()
+            releasePlayer()
+            previous?.resetUi()
+        }
+
+        private fun releasePlayer() {
+            stopProgress()
+            val previous = exoPlayer
+            exoPlayer = null
+            previous?.removeListener(this)
+            previous?.release()
+        }
+
+        private fun stopProgress() {
+            progressJob?.cancel()
+            progressJob = null
+        }
+
+        private fun updateProgress() {
+            val view = owner.get() ?: return
+            val player = exoPlayer ?: return
+            view.setText(view.calculateTime((player.currentPosition / 1000).toInt()))
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            val view = owner.get() ?: return
+            when (playbackState) {
+                Player.STATE_BUFFERING -> {
+                    view.setState(if (exoPlayer?.playWhenReady == true) STATE_LOADING else STATE_PAUSING)
+                }
+                Player.STATE_READY -> {
+                    view.animationView.visibility = VISIBLE
+                    view.setState(if (exoPlayer?.isPlaying == true) STATE_PLAYING else STATE_PAUSING)
+                    updateProgress()
+                }
+                Player.STATE_ENDED -> {
+                    stopProgress()
+                    view.completed = true
+                    view.setState(STATE_PAUSING)
+                    view.setText(view.calculateTime(view.duration / 1000))
+                }
+                Player.STATE_IDLE -> {
+                    stopProgress()
+                    view.setState(STATE_PAUSING)
+                }
             }
-            sExoPlayer = null
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            stopProgress()
+            val view = owner.get() ?: return
+            if (isPlaying) {
+                view.setState(STATE_PLAYING)
+                progressJob = scope.launch {
+                    while (isActive && exoPlayer?.isPlaying == true) {
+                        updateProgress()
+                        delay(1000)
+                    }
+                }
+            } else if (exoPlayer?.playbackState != Player.STATE_BUFFERING ||
+                exoPlayer?.playWhenReady != true
+            ) {
+                view.setState(STATE_PAUSING)
+                updateProgress()
+            }
+        }
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (!playWhenReady) {
+                stopProgress()
+                owner.get()?.setState(STATE_PAUSING)
+            } else if (exoPlayer?.playbackState == Player.STATE_BUFFERING) {
+                owner.get()?.setState(STATE_LOADING)
+            }
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            stopProgress()
+            owner.get()?.let {
+                it.completed = true // The next click retries preparation rather than a released/error state.
+                it.setState(STATE_PAUSING)
+            }
+            Log.w(TAG, "Voice playback failed: ${error.errorCodeName}")
         }
     }
 
@@ -509,6 +409,5 @@ class VoicePlayerView @JvmOverloads constructor(
         const val STATE_LOADING = 0
         const val STATE_PLAYING = 1
         const val STATE_PAUSING = 2
-        val handler = Handler(Looper.getMainLooper())
     }
 }

@@ -73,7 +73,7 @@ fun SeekBar(
             progress.coerceAtMost(max).toFloat() / max.toFloat()
         }
 
-        val indicatorOffsetByPercentage = remember(percentage) {
+        val indicatorOffsetByPercentage = remember(percentage, boxWidth) {
             Offset(percentage * boxWidth, 0f)
         }
 
@@ -84,7 +84,8 @@ fun SeekBar(
         val finalIndicatorOffset = remember(
             indicatorOffsetByDragState,
             indicatorOffsetByPercentage,
-            onGoingDrag
+            onGoingDrag,
+            boxWidth
         ) {
             val finalIndicatorPosition = if (onGoingDrag) {
                 indicatorOffsetByDragState

@@ -21,7 +21,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
-import com.huanchengfly.tieba.post.ui.widgets.compose.video.util.FlowDebouncer
+import com.huanchengfly.tieba.post.ui.widgets.media.PlaybackResource
 import com.huanchengfly.tieba.post.ui.widgets.compose.video.util.set
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -44,7 +44,8 @@ internal class DefaultVideoPlayerController(
     private val coroutineScope: CoroutineScope,
     private val fullScreenModeChangedListener: OnFullScreenModeChangedListener? = null
 ) : VideoPlayerController {
-    private val released = AtomicBoolean(false)
+    private val released = AtomicBoolean(true)
+    private var foreground = true
 
     private val _state = MutableStateFlow(initialState)
     override val state: StateFlow<VideoPlayerState>
@@ -71,7 +72,7 @@ internal class DefaultVideoPlayerController(
     @SuppressLint("StateFlowValueCalledInComposition")
     @Composable
     fun <T> collect(filter: VideoPlayerState.() -> T): State<T> {
-        return remember(filter) {
+        return remember(this, filter) {
             _state.map { it.filter() }
         }.collectAsState(
             initial = _state.value.filter()
@@ -86,26 +87,24 @@ internal class DefaultVideoPlayerController(
 
     private lateinit var source: VideoPlayerSource
     private var playerView: PlayerView? = null
+    private var previewPlayerView: PlayerView? = null
 
     private var updateDurationAndPositionJob: Job? = null
     private var autoHideControllerJob: Job? = null
+    private var playHideJob: Job? = null
+    private var previewSeekJob: Job? = null
 
     private val playerListener = object : Player.Listener {
         @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
         override fun onPlaybackStateChanged(playbackState: Int) {
+            if (released.get()) return
             if (PlaybackState.of(playbackState) == PlaybackState.READY) {
                 initialStateRunner = initialStateRunner?.let {
                     it.invoke()
                     null
                 }
 
-                updateDurationAndPositionJob?.cancel()
-                updateDurationAndPositionJob = coroutineScope.launch {
-                    while (this.isActive) {
-                        updateDurationAndPosition()
-                        delay(250)
-                    }
-                }
+                updateDurationAndPosition()
             }
 
             _state.set {
@@ -116,13 +115,31 @@ internal class DefaultVideoPlayerController(
             }
         }
 
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (released.get()) return
+            updateDurationAndPositionJob?.cancel()
+            updateDurationAndPositionJob = null
+            if (isPlaying) {
+                updateDurationAndPositionJob = coroutineScope.launch {
+                    while (isActive && !released.get()) {
+                        updateDurationAndPosition()
+                        delay(250)
+                    }
+                }
+            } else {
+                updateDurationAndPosition()
+            }
+        }
+
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (released.get()) return
             _state.set {
                 copy(isPlaying = playWhenReady)
             }
         }
 
         override fun onVideoSizeChanged(videoSize: VideoSize) {
+            if (released.get()) return
             _state.set {
                 copy(videoSize = videoSize.width.toFloat() to videoSize.height.toFloat())
             }
@@ -132,66 +149,44 @@ internal class DefaultVideoPlayerController(
     /**
      * Internal exoPlayer instance
      */
-    private var _exoPlayer: ExoPlayer? = null
+    private val mainPlayer = PlaybackResource<ExoPlayer>(::createExoPlayer) { it.release() }
     private val exoPlayer: ExoPlayer
-        get() {
-            if (_exoPlayer == null) {
-                _exoPlayer = createExoPlayer()
-            }
-            return _exoPlayer!!
-        }
+        get() = checkNotNull(mainPlayer.getOrCreate()) { "Video player owner is inactive" }
 
-    private fun createExoPlayer() = ExoPlayer.Builder(context)
+    private fun createExoPlayer(): ExoPlayer = ExoPlayer.Builder(context.applicationContext)
         .build()
         .apply {
-            playWhenReady = initialState.isPlaying
+            playWhenReady = _state.value.isPlaying
             addListener(playerListener)
         }
 
     /**
      * Not so efficient way of showing preview in video slider.
      */
-    private var _previewExoPlayer: ExoPlayer? = null
+    private val previewPlayer = PlaybackResource<ExoPlayer>(::createPreviewExoPlayer) { it.release() }
     private val previewExoPlayer: ExoPlayer
-        get() {
-            if (_previewExoPlayer == null) {
-                _previewExoPlayer = createPreviewExoPlayer()
-            }
-            return _previewExoPlayer!!
-        }
+        get() = checkNotNull(previewPlayer.getOrCreate()) { "Video player owner is inactive" }
 
-    private fun createPreviewExoPlayer() = ExoPlayer.Builder(context)
+    private fun createPreviewExoPlayer(): ExoPlayer = ExoPlayer.Builder(context.applicationContext)
         .build()
         .apply {
             playWhenReady = false
         }
 
-    private val previewSeekDebouncer = FlowDebouncer<Long>(200L)
-
-    init {
-        exoPlayer.playWhenReady = initialState.isPlaying
-
-        coroutineScope.launch {
-            previewSeekDebouncer.collect { position ->
-                previewExoPlayer.seekTo(position)
-            }
-        }
-    }
-
     fun initialize() {
+        if (!released.compareAndSet(true, false)) return
+        mainPlayer.activate()
+        previewPlayer.activate()
         Log.i("VideoPlayerController", "$this initialize")
         val currentState = _state.value
         exoPlayer.playWhenReady = currentState.isPlaying
         initialStateRunner = {
             exoPlayer.seekTo(currentState.currentPosition)
         }
-        if (this::source.isInitialized) {
-            setSource(source)
-        }
+        waitPlayerViewToPrepare.set(this::source.isInitialized)
         if (playerView != null) {
             playerViewAvailable(playerView!!)
         }
-        released.set(false)
     }
 
     /**
@@ -201,28 +196,35 @@ internal class DefaultVideoPlayerController(
     private val waitPlayerViewToPrepare = AtomicBoolean(false)
 
     override fun play() {
+        if (released.get() || !foreground) return
         _state.set { copy(startedPlay = true) }
         if (exoPlayer.playbackState == STATE_ENDED) {
             exoPlayer.seekTo(0)
         }
         exoPlayer.playWhenReady = true
-         coroutineScope.launch {
+        playHideJob?.cancel()
+        playHideJob = coroutineScope.launch {
             delay(200)
-            hideControls()
+            if (!released.get()) hideControls()
         }
     }
 
     override fun pause() {
+        if (released.get()) return
         exoPlayer.playWhenReady = false
+        playHideJob?.cancel()
+        previewSeekJob?.cancel()
         showControls(false)
     }
 
     override fun togglePlaying() {
+        if (released.get()) return
         if (exoPlayer.isPlaying) pause()
         else play()
     }
 
     override fun quickSeekForward() {
+        if (released.get() || !foreground) return
         if (_state.value.quickSeekAction.direction != QuickSeekDirection.None) {
             // Currently animating
             return
@@ -234,6 +236,7 @@ internal class DefaultVideoPlayerController(
     }
 
     override fun quickSeekRewind() {
+        if (released.get() || !foreground) return
         if (_state.value.quickSeekAction.direction != QuickSeekDirection.None) {
             // Currently animating
             return
@@ -245,17 +248,28 @@ internal class DefaultVideoPlayerController(
     }
 
     override fun seekTo(position: Long) {
+        if (released.get() || !foreground) return
         exoPlayer.seekTo(position)
         updateDurationAndPosition()
     }
 
     override fun setSource(source: VideoPlayerSource) {
         this.source = source
-        if (playerView == null) {
+        if (released.get() || playerView == null) {
             waitPlayerViewToPrepare.set(true)
         } else {
+            waitPlayerViewToPrepare.set(false)
             prepare()
         }
+    }
+
+    fun setForeground(isForeground: Boolean) {
+        foreground = isForeground
+        if (!isForeground) pause()
+    }
+
+    fun setThumbnail(thumbnailUrl: String?) {
+        _state.set { copy(thumbnailUrl = thumbnailUrl) }
     }
 
     fun enableGestures(isEnabled: Boolean) {
@@ -281,11 +295,12 @@ internal class DefaultVideoPlayerController(
     }
 
     private fun autoHideControls() {
+        if (released.get()) return
         cancelAutoHideControls()
         Log.i("VideoPlayerController", "autoHideControls")
         autoHideControllerJob = coroutineScope.launch {
             delay(3000)
-            hideControls()
+            if (!released.get()) hideControls()
         }
     }
 
@@ -302,6 +317,8 @@ internal class DefaultVideoPlayerController(
     }
 
     private fun updateDurationAndPosition() {
+        if (released.get()) return
+        val exoPlayer = mainPlayer.peek() ?: return
         if (exoPlayer.playbackState == STATE_READY || exoPlayer.playbackState == STATE_ENDED) {
             _state.set {
                 copy(
@@ -316,6 +333,7 @@ internal class DefaultVideoPlayerController(
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun prepare() {
+        if (released.get()) return
         fun createVideoSource(): MediaSource {
             val dataSourceFactory: DataSource.Factory = DefaultDataSource.Factory(context)
 
@@ -346,7 +364,9 @@ internal class DefaultVideoPlayerController(
     }
 
     fun playerViewAvailable(playerView: PlayerView) {
+        if (this.playerView !== playerView) this.playerView?.player = null
         this.playerView = playerView
+        if (released.get()) return
         playerView.player = exoPlayer
         playerView.setBackgroundColor(videoPlayerBackgroundColor)
 
@@ -356,31 +376,54 @@ internal class DefaultVideoPlayerController(
     }
 
     fun previewPlayerViewAvailable(playerView: PlayerView) {
-        playerView.player = previewExoPlayer
+        if (previewPlayerView !== playerView) previewPlayerView?.player = null
+        previewPlayerView = playerView
+        if (!released.get()) playerView.player = previewExoPlayer
+    }
+
+    fun playerViewReleased(view: PlayerView) {
+        view.player = null
+        if (playerView === view) playerView = null
+        if (previewPlayerView === view) previewPlayerView = null
     }
 
     fun previewSeekTo(position: Long) {
-        // position is very accurate. Thumbnail doesn't have to be.
-        // Roll to the nearest "even" integer.
-        val seconds = position.toInt() / 1000
-        val nearestEven = (seconds - seconds.rem(2)).toLong()
-        coroutineScope.launch {
-            previewSeekDebouncer.put(nearestEven * 1000)
+        if (released.get() || !foreground) return
+        // A preview only needs two-second precision, and only the latest seek survives.
+        val roundedPosition = (position.coerceAtLeast(0) / 2000) * 2000
+        previewSeekJob?.cancel()
+        previewSeekJob = coroutineScope.launch {
+            delay(200)
+            if (!released.get() && foreground) previewExoPlayer.seekTo(roundedPosition)
         }
     }
 
     override fun reset() {
+        if (released.get()) return
         exoPlayer.stop()
         previewExoPlayer.stop()
     }
 
     override fun release() {
-        Log.i("VideoPlayerController", "$this is release. is released $released")
-        if (released.compareAndSet(false, true)) {
-            exoPlayer.release()
-            previewExoPlayer.release()
-            _exoPlayer = null
-            _previewExoPlayer = null
+        if (!released.compareAndSet(false, true)) return
+        updateDurationAndPositionJob?.cancel()
+        autoHideControllerJob?.cancel()
+        playHideJob?.cancel()
+        previewSeekJob?.cancel()
+        updateDurationAndPositionJob = null
+        autoHideControllerJob = null
+        playHideJob = null
+        previewSeekJob = null
+        initialStateRunner = null
+        playerView?.player = null
+        previewPlayerView?.player = null
+        playerView = null
+        previewPlayerView = null
+        mainPlayer.peek()?.removeListener(playerListener)
+        try {
+            mainPlayer.release()
+        } finally {
+            previewPlayer.release()
         }
     }
 

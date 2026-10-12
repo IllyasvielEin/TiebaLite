@@ -20,3 +20,10 @@ data class VideoPlayerState(
     val quickSeekAction: QuickSeekAction = QuickSeekAction.none(),
     val isFullScreen: Boolean = false
 ) : Parcelable
+
+/** Restored presentation/progress belongs only to the media whose discriminator matches. */
+@Parcelize
+internal data class SavedVideoPlayerState(
+    val sourceIdentity: String,
+    val state: VideoPlayerState,
+) : Parcelable
