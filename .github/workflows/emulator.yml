@@ -118,6 +118,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/test_offline_smoke.py
+          python3 scripts/test_emulator_storage.py
           python3 scripts/test_kvm_access.py
           python3 app/src/test/compatibility/check_image_picker.py
           ./gradlew --no-daemon --console=plain --stacktrace -PofflineSmoke=true :app:assembleSmoke :app:assembleSmokeAndroidTest
@@ -145,6 +146,13 @@ jobs:
           test -f "$ANDROID_USER_HOME/debug.keystore"
           (cd "$RUNNER_TEMP/offline-apks" && sha256sum target.apk test.apk > SHA256SUMS)
 
+      - name: Check host capacity for disposable emulator data image
+        timeout-minutes: 1
+        run: >-
+          python3 scripts/check_emulator_storage.py host
+          --apks "$RUNNER_TEMP/offline-apks"
+          --report out/smoke-reports/storage-host.json
+
       - name: Enable approved one-run KVM access only after APK verification
         shell: bash
         run: |
@@ -161,7 +169,7 @@ jobs:
             --name offline-smoke --package "$SMOKE_IMAGE" --device pixel_7 --force
           "$ANDROID_HOME/emulator/emulator" -avd offline-smoke -port 5554 \
             -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data \
-            -gpu software -accel on -cores 2 -memory 4096 \
+            -gpu software -accel on -cores 2 -memory 4096 -partition-size 6144 \
             -camera-back none -camera-front none > "$RUNNER_TEMP/offline-emulator.log" 2>&1 &
           echo "$!" > "$RUNNER_TEMP/offline-emulator.pid"
           timeout 240 "$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL" wait-for-device
@@ -186,6 +194,9 @@ jobs:
           set -euo pipefail
           adb="$ANDROID_HOME/platform-tools/adb"
           (cd "$RUNNER_TEMP/offline-apks" && sha256sum -c SHA256SUMS)
+          python3 scripts/check_emulator_storage.py guest \
+            --apks "$RUNNER_TEMP/offline-apks" --adb "$adb" --serial "$ANDROID_SERIAL" \
+            --report out/smoke-reports/storage-guest.json
           "$adb" -s "$ANDROID_SERIAL" install -t "$RUNNER_TEMP/offline-apks/target.apk"
           "$adb" -s "$ANDROID_SERIAL" install -t "$RUNNER_TEMP/offline-apks/test.apk"
           timeout --signal=TERM 10m "$adb" -s "$ANDROID_SERIAL" shell am instrument -w -r \
@@ -246,11 +257,12 @@ jobs:
           root = Path('out/smoke-reports')
           root.mkdir(parents=True, exist_ok=True)
           allowed = {'sdk-versions.json', 'acceleration.txt', 'device.txt', 'apk-verification.json',
-                     'summary.json', 'instrumentation.txt', 'kvm-diagnostics.json', 'kvm-restoration.json', 'device-profile.txt'}
+                     'summary.json', 'instrumentation.txt', 'kvm-diagnostics.json', 'kvm-restoration.json', 'device-profile.txt',
+                     'storage-host.json', 'storage-guest.json'}
           allowed.update(f'{role}-{kind}.txt' for role in ('target', 'test')
                          for kind in ('permissions', 'badging', 'manifest'))
           for file in root.iterdir():
-              if file.is_file() and (file.name not in allowed or file.stat().st_size > (4096 if file.name.startswith('kvm-') else 2 * 1024 * 1024)):
+              if file.is_file() and (file.name not in allowed or file.stat().st_size > (4096 if file.name.startswith(('kvm-', 'storage-')) else 2 * 1024 * 1024)):
                   file.unlink()
           # No logcat, screenshots, credentials, raw emulator logs, APKs or AVD/userdata dumps.
           PY

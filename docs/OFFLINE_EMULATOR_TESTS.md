@@ -139,6 +139,49 @@ installed revisions, verifies `pixel_7` exists in the installed official AVD dev
 and confirms the booted device SDK. SDK package revisions are not
 immutable; the saved report identifies the versions used by each run.
 
+### Disposable data-partition capacity and install preflight
+
+Run `38234454811` reached a booted API37 emulator and passed the actual target/test APK
+isolation checks, then PackageInstaller rejected the first install with “Requested internal
+only, but not enough space.” The retained reports contain no APK file sizes, guest `/data`
+free-block counts or AVD partition configuration for that failed runner. Its exact free
+space and active partition size are therefore unknown; the SDK source's generic defaults
+are not evidence of that runner's effective configuration.
+
+The workflow now requests a fresh **6144 MiB** partition with the official
+`-partition-size 6144` option and existing `-wipe-data`. Android's command-line documentation
+describes this option; the official emulator source explicitly applies it to the data
+partition, overriding the AVD setting. It is a capacity configuration for a new disposable
+AVD, not a guest remount or change to Android's storage/install safeguards. Runtime
+confirmation of the larger filesystem remains pending until the next authorized run.
+
+Two read-only capacity checks provide measured diagnostics:
+
+1. Before requesting KVM access, the host check reads both verified APK file sizes and
+   their ZIP entry metadata without extraction. It requires temporary host disk space for
+   the complete 6144 MiB data image plus the install allowance below. It does not delete
+   unrelated runner files to make room.
+2. After boot and the APK hash recheck, before **either** `adb install`, the guest check
+   reads only `stat -f -c %S,%b,%f,%a /data` and `df -Pk /data` through the explicit emulator
+   serial. Each query has a 15-second timeout. It records block size, total/free/available
+   block counts, df byte counts and each APK's compressed/uncompressed size. It uses the
+   lower available-space measurement and fails closed on missing, malformed or
+   insufficient data.
+
+The install allowance is `2 × combined APK bytes + combined uncompressed ZIP entry bytes
++ 1 GiB reserve`. The two copies allow for staging and installed APKs; full ZIP entry sizes
+conservatively include extracted content; the reserve leaves room for dex/runtime growth
+and the OS low-space margin. This is a documented planning heuristic, not a claim to
+reproduce PackageInstaller's exact allocation policy or guarantee installation. Android
+remains the final authority. No low-storage checks, permissions, install-location policy
+or threshold settings are disabled or changed.
+
+`storage-host.json` and `storage-guest.json` contain only these numeric measurements,
+formula inputs and a short status/error. They are each capped at **4 KiB**, retained for
+three days with the other allowlisted reports, and include no raw filesystem dump,
+application data or APK contents. A failed preflight leaves the diagnostic report and
+fails the job; ordinary emulator/KVM/key cleanup still runs.
+
 ### Explicit one-run KVM access
 
 The owner-approved dispatch covers only these two disposable API37/API35 runners. Keep
@@ -191,8 +234,8 @@ and failure paths but do not prove real hosted ACL restoration or emulator execu
 
 The workflow uploads only allowlisted small text/JSON reports for three days: package
 versions, acceleration result, device API, packaged-manifest proof and instrumentation
-results, plus numeric KVM diagnostics and restoration status. KVM reports are capped at
-4 KiB and other files at 2 MiB. The private original ACL/state is never uploaded. It does
+results, plus numeric KVM diagnostics/restoration status and storage preflight measurements.
+KVM and storage reports are capped at 4 KiB and other files at 2 MiB. The private original ACL/state is never uploaded. It does
 not upload APKs, signing keys, raw emulator logs, logcat, screenshots, heap dumps, AVD
 snapshots or Android userdata.
 
@@ -200,6 +243,7 @@ Host checks (these do not need an SDK):
 
 ```sh
 python3 scripts/test_offline_smoke.py
+python3 scripts/test_emulator_storage.py
 python3 scripts/test_kvm_access.py
 python3 app/src/test/compatibility/check_image_picker.py
 ```
@@ -223,6 +267,7 @@ before these explicit checks. Successful runtime reporting requires
 - [Android SDK terms](https://developer.android.com/studio/terms)
 - [Emulator release notes](https://developer.android.com/studio/releases/emulator)
 - [Emulator acceleration and rendering modes](https://developer.android.com/studio/run/emulator-acceleration)
-- [Emulator command-line options](https://developer.android.com/studio/run/emulator-commandline)
+- [Emulator command-line options, including partition sizing](https://developer.android.com/studio/run/emulator-commandline)
+- [Official emulator data-partition option handling](https://android.googlesource.com/platform/external/qemu/+/emu-master-dev/android/android-emu/android/main-common.c)
 - [ActivityResultRegistry testing](https://developer.android.com/training/basics/intents/result#test)
 - [Compose StateRestorationTester](https://developer.android.com/reference/kotlin/androidx/compose/ui/test/junit4/StateRestorationTester)
