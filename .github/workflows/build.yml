@@ -72,6 +72,7 @@ jobs:
           python3 app/src/test/security/check_protobuf_response_contracts.py
           python3 app/src/test/compatibility/check_compose_compatibility.py
           python3 app/src/test/compatibility/check_image_picker.py
+          python3 app/src/test/compatibility/check_min_sdk35.py
 
       - name: Record and verify resolved Wire runtime
         shell: bash

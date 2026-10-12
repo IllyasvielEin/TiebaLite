@@ -2,7 +2,6 @@ package com.huanchengfly.tieba.post.utils
 
 import android.app.Activity
 import android.content.Context
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.Manifest
@@ -96,20 +95,16 @@ object PermissionUtils {
                 }
 
                 "android.permission.READ_MEDIA_IMAGES", "android.permission.READ_MEDIA_VIDEO" -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        val hint = context.getString(R.string.common_permission_image_and_video)
-                        if (!permissionNames.contains(hint)) {
-                            permissionNames.add(hint)
-                        }
+                    val hint = context.getString(R.string.common_permission_image_and_video)
+                    if (!permissionNames.contains(hint)) {
+                        permissionNames.add(hint)
                     }
                 }
 
                 "android.permission.READ_MEDIA_AUDIO" -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        val hint = context.getString(R.string.common_permission_music_and_audio)
-                        if (!permissionNames.contains(hint)) {
-                            permissionNames.add(hint)
-                        }
+                    val hint = context.getString(R.string.common_permission_music_and_audio)
+                    if (!permissionNames.contains(hint)) {
+                        permissionNames.add(hint)
                     }
                 }
 
@@ -128,8 +123,7 @@ object PermissionUtils {
                 }
 
                 Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, "android.permission.ACCESS_BACKGROUND_LOCATION" -> {
-                    val hint: String = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-                        !permissions.contains(Manifest.permission.ACCESS_FINE_LOCATION) &&
+                    val hint: String = if (!permissions.contains(Manifest.permission.ACCESS_FINE_LOCATION) &&
                         !permissions.contains(Manifest.permission.ACCESS_COARSE_LOCATION)
                     ) {
                         context.getString(R.string.common_permission_location_background)
@@ -142,9 +136,7 @@ object PermissionUtils {
                 }
 
                 Manifest.permission.BODY_SENSORS, "android.permission.BODY_SENSORS_BACKGROUND" -> {
-                    val hint: String = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                        !permissions.contains(Manifest.permission.BODY_SENSORS)
-                    ) {
+                    val hint: String = if (!permissions.contains(Manifest.permission.BODY_SENSORS)) {
                         context.getString(R.string.common_permission_body_sensors_background)
                     } else {
                         context.getString(R.string.common_permission_body_sensors)
@@ -155,20 +147,16 @@ object PermissionUtils {
                 }
 
                 "android.permission.BLUETOOTH_SCAN", "android.permission.BLUETOOTH_CONNECT", "android.permission.BLUETOOTH_ADVERTISE" -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        val hint = context.getString(R.string.common_permission_nearby_devices)
-                        if (!permissionNames.contains(hint)) {
-                            permissionNames.add(hint)
-                        }
+                    val hint = context.getString(R.string.common_permission_nearby_devices)
+                    if (!permissionNames.contains(hint)) {
+                        permissionNames.add(hint)
                     }
                 }
 
                 "android.permission.NEARBY_WIFI_DEVICES" -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        val hint = context.getString(R.string.common_permission_nearby_devices)
-                        if (!permissionNames.contains(hint)) {
-                            permissionNames.add(hint)
-                        }
+                    val hint = context.getString(R.string.common_permission_nearby_devices)
+                    if (!permissionNames.contains(hint)) {
+                        permissionNames.add(hint)
                     }
                 }
 
@@ -195,7 +183,7 @@ object PermissionUtils {
 
                 Manifest.permission.READ_CALL_LOG, Manifest.permission.WRITE_CALL_LOG, "android.permission.PROCESS_OUTGOING_CALLS" -> {
                     val hint =
-                        context.getString(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) R.string.common_permission_call_logs else R.string.common_permission_phone)
+                        context.getString(R.string.common_permission_call_logs)
                     if (!permissionNames.contains(hint)) {
                         permissionNames.add(hint)
                     }
@@ -203,19 +191,17 @@ object PermissionUtils {
 
                 "android.permission.ACTIVITY_RECOGNITION" -> {
                     val hint =
-                        context.getString(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) R.string.common_permission_activity_recognition_api30 else R.string.common_permission_activity_recognition_api29)
+                        context.getString(R.string.common_permission_activity_recognition_api30)
                     if (!permissionNames.contains(hint)) {
                         permissionNames.add(hint)
                     }
                 }
 
                 "android.permission.ACCESS_MEDIA_LOCATION" -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        val hint =
-                            context.getString(R.string.common_permission_access_media_location)
-                        if (!permissionNames.contains(hint)) {
-                            permissionNames.add(hint)
-                        }
+                    val hint =
+                        context.getString(R.string.common_permission_access_media_location)
+                    if (!permissionNames.contains(hint)) {
+                        permissionNames.add(hint)
                     }
                 }
 
@@ -227,11 +213,9 @@ object PermissionUtils {
                 }
 
                 "android.permission.MANAGE_EXTERNAL_STORAGE" -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        val hint = context.getString(R.string.common_permission_all_file_access)
-                        if (!permissionNames.contains(hint)) {
-                            permissionNames.add(hint)
-                        }
+                    val hint = context.getString(R.string.common_permission_all_file_access)
+                    if (!permissionNames.contains(hint)) {
+                        permissionNames.add(hint)
                     }
                 }
 
@@ -264,11 +248,9 @@ object PermissionUtils {
                 }
 
                 "android.permission.POST_NOTIFICATIONS" -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        val hint = context.getString(R.string.common_permission_post_notifications)
-                        if (!permissionNames.contains(hint)) {
-                            permissionNames.add(hint)
-                        }
+                    val hint = context.getString(R.string.common_permission_post_notifications)
+                    if (!permissionNames.contains(hint)) {
+                        permissionNames.add(hint)
                     }
                 }
 

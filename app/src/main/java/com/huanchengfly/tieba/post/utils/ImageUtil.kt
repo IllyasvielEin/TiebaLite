@@ -3,7 +3,6 @@ package com.huanchengfly.tieba.post.utils
 import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Bitmap.CompressFormat
 import android.graphics.Canvas
@@ -13,7 +12,6 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
-import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.text.TextUtils
@@ -36,8 +34,6 @@ import com.github.panpf.sketch.transform.RoundedCornersTransformation
 import com.huanchengfly.tieba.post.App.Companion.INSTANCE
 import com.huanchengfly.tieba.post.R
 import com.huanchengfly.tieba.post.dpToPxFloat
-import com.huanchengfly.tieba.post.utils.PermissionUtils.PermissionData
-import com.huanchengfly.tieba.post.utils.PermissionUtils.askPermission
 import com.huanchengfly.tieba.post.utils.ThemeUtil.isNightMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -266,15 +262,11 @@ object ImageUtil {
                             }
                         }
                     }
-                    val shareUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                        FileProvider.getUriForFile(
-                            context,
-                            context.packageName + ".share.FileProvider",
-                            destFile
-                        )
-                    } else {
-                        Uri.fromFile(destFile)
-                    }
+                    val shareUri = FileProvider.getUriForFile(
+                        context,
+                        context.packageName + ".share.FileProvider",
+                        destFile
+                    )
                     withContext(Dispatchers.Main) {
                         taskCallback.onGetUri(shareUri)
                     }
@@ -294,29 +286,10 @@ object ImageUtil {
             if (taskCallback != null) downloadForShare(context, url, taskCallback)
             return
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            downloadAboveQ(context, url)
-            return
-        }
-        askPermission(
-            context,
-            PermissionData(
-                listOf(
-                    PermissionUtils.READ_EXTERNAL_STORAGE,
-                    PermissionUtils.WRITE_EXTERNAL_STORAGE
-                ),
-                context.getString(R.string.tip_permission_storage)
-            ),
-            R.string.toast_no_permission_save_photo
-        ) {
-            downloadBelowQ(context, url)
-        }
+        downloadAboveQ(context, url)
     }
 
     private fun downloadAboveQ(context: Context, url: String?) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            return
-        }
         CoroutineScope(Dispatchers.IO).launch {
             val downloadResult = DownloadRequest(context, url).execute()
             if (downloadResult is DownloadResult.Success) {
@@ -360,51 +333,6 @@ object ImageUtil {
                     } catch (e: Exception) {
                         e.printStackTrace()
                         cr.delete(uri, null, null)
-                    }
-                }
-            }
-        }
-    }
-
-    private fun downloadBelowQ(context: Context, url: String?) {
-        CoroutineScope(Dispatchers.IO).launch {
-            val downloadResult = DownloadRequest(context, url).execute()
-            if (downloadResult is DownloadResult.Success) {
-                var fileName = URLUtil.guessFileName(url, null, "image/jpeg")
-                downloadResult.data.data.newInputStream().use { inputStream ->
-                    if (isGifFile(inputStream)) {
-                        fileName = FileUtil.changeFileExtension(fileName, ".gif")
-                    }
-                }
-                downloadResult.data.data.newInputStream().use { inputStream ->
-                    val pictureFolder =
-                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-                    val appDir = File(pictureFolder, FileUtil.FILE_FOLDER)
-                    val dirExists =
-                        withContext(Dispatchers.IO) { appDir.exists() || appDir.mkdirs() }
-                    if (dirExists) {
-                        val destFile = File(appDir, fileName)
-                        if (!destFile.exists()) {
-                            withContext(Dispatchers.IO) {
-                                destFile.createNewFile()
-                            }
-                        }
-                        destFile.outputStream().use { outputStream ->
-                            inputStream.copyTo(outputStream)
-                        }
-                        context.sendBroadcast(
-                            Intent(
-                                Intent.ACTION_MEDIA_SCANNER_SCAN_FILE,
-                                Uri.fromFile(File(destFile.path))
-                            )
-                        )
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.toast_photo_saved, destFile.path),
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
                     }
                 }
             }

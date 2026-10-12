@@ -10,7 +10,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.Intent.ACTION_VIEW
 import android.net.Uri
-import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.huanchengfly.tieba.post.R
@@ -25,30 +24,24 @@ import retrofit2.Response
 class NotifyJobService : JobService() {
     var notificationManager: NotificationManager? = null
     private fun createChannel(id: String, name: String) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                id,
-                name, NotificationManager.IMPORTANCE_DEFAULT
-            )
-            channel.group = CHANNEL_GROUP
-            channel.setShowBadge(true)
-            notificationManager!!.createNotificationChannel(channel)
-        }
+        val channel = NotificationChannel(
+            id,
+            name, NotificationManager.IMPORTANCE_DEFAULT
+        )
+        channel.group = CHANNEL_GROUP
+        channel.setShowBadge(true)
+        notificationManager!!.createNotificationChannel(channel)
     }
 
     override fun onStartJob(params: JobParameters): Boolean {
         Log.i(TAG, "onStartJob")
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (notificationManager != null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channelGroup = NotificationChannelGroup(CHANNEL_GROUP, CHANNEL_GROUP_NAME)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    channelGroup.description = "贴吧的各种消息通知"
-                }
-                notificationManager!!.createNotificationChannelGroup(channelGroup)
-                createChannel(CHANNEL_REPLY, CHANNEL_REPLY_NAME)
-                createChannel(CHANNEL_AT, CHANNEL_AT_NAME)
-            }
+            val channelGroup = NotificationChannelGroup(CHANNEL_GROUP, CHANNEL_GROUP_NAME)
+            channelGroup.description = "贴吧的各种消息通知"
+            notificationManager!!.createNotificationChannelGroup(channelGroup)
+            createChannel(CHANNEL_REPLY, CHANNEL_REPLY_NAME)
+            createChannel(CHANNEL_AT, CHANNEL_AT_NAME)
         }
         TiebaApi.getInstance().msg().enqueue(object : Callback<MsgBean> {
             override fun onFailure(call: Call<MsgBean>, t: Throwable) {

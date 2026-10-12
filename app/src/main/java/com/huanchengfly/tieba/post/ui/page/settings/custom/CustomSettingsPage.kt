@@ -1,6 +1,5 @@
 package com.huanchengfly.tieba.post.ui.page.settings.custom
 
-import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -189,43 +188,41 @@ fun CustomSettingsPage(
                     useSelectedAsSummary = true,
                 )
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                prefsItem {
-                    val supportThemedIcons = remember {
-                        persistentListOf(
-                            LauncherIcons.NEW_ICON,
+            prefsItem {
+                val supportThemedIcons = remember {
+                    persistentListOf(
+                        LauncherIcons.NEW_ICON,
 //                            LauncherIcons.NEW_ICON_INVERT,
-                        )
-                    }
-                    val currentLauncherIcon by rememberPreferenceAsState(
-                        key = stringPreferencesKey("app_icon"),
-                        defaultValue = LauncherIcons.NEW_ICON
-                    )
-                    val isCurrentSupportThemedIcon by remember {
-                        derivedStateOf {
-                            supportThemedIcons.contains(currentLauncherIcon)
-                        }
-                    }
-                    SwitchPref(
-                        key = "useThemedIcon",
-                        title = stringResource(id = R.string.title_settings_use_themed_icon),
-                        defaultChecked = false,
-                        enabled = isCurrentSupportThemedIcon,
-                        leadingIcon = {
-                            LeadingIcon {
-                                AvatarIcon(
-                                    icon = Icons.Outlined.ColorLens,
-                                    size = Sizes.Small,
-                                    contentDescription = null,
-                                )
-                            }
-                        },
-                        onCheckedChange = {
-                            AppIconUtil.setIcon(isThemed = it)
-                        },
-                        summary = stringResource(id = R.string.tip_settings_use_themed_icon_summary_not_supported).takeUnless { isCurrentSupportThemedIcon },
                     )
                 }
+                val currentLauncherIcon by rememberPreferenceAsState(
+                    key = stringPreferencesKey("app_icon"),
+                    defaultValue = LauncherIcons.NEW_ICON
+                )
+                val isCurrentSupportThemedIcon by remember {
+                    derivedStateOf {
+                        supportThemedIcons.contains(currentLauncherIcon)
+                    }
+                }
+                SwitchPref(
+                    key = "useThemedIcon",
+                    title = stringResource(id = R.string.title_settings_use_themed_icon),
+                    defaultChecked = false,
+                    enabled = isCurrentSupportThemedIcon,
+                    leadingIcon = {
+                        LeadingIcon {
+                            AvatarIcon(
+                                icon = Icons.Outlined.ColorLens,
+                                size = Sizes.Small,
+                                contentDescription = null,
+                            )
+                        }
+                    },
+                    onCheckedChange = {
+                        AppIconUtil.setIcon(isThemed = it)
+                    },
+                    summary = stringResource(id = R.string.tip_settings_use_themed_icon_summary_not_supported).takeUnless { isCurrentSupportThemedIcon },
+                )
             }
             prefsItem {
                 SwitchPref(

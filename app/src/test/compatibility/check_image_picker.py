@@ -116,13 +116,18 @@ class ImagePickerChecks(unittest.TestCase):
         self.assertIn('var mimeType = "image/jpeg"', image_util)
         self.assertIn('mimeType = "image/gif"', image_util)
 
-    def test_old_download_permissions_and_publication_boundary_remain(self):
+    def test_modern_downloads_and_publication_boundary_remain(self):
         manifest = ET.parse(ROOT / 'app/src/main/AndroidManifest.xml').getroot()
         permissions = {item.get(ANDROID + 'name'): item.get(ANDROID + 'maxSdkVersion')
                        for item in manifest.findall('uses-permission')}
         self.assertEqual('28', permissions['android.permission.WRITE_EXTERNAL_STORAGE'])
         self.assertEqual('32', permissions['android.permission.READ_EXTERNAL_STORAGE'])
-        self.assertIn('PermissionUtils.WRITE_EXTERNAL_STORAGE', source('utils/ImageUtil.kt'))
+        image_util = source('utils/ImageUtil.kt')
+        self.assertIn('downloadAboveQ(context, url)', image_util)
+        self.assertIn('MediaStore.Images.Media.RELATIVE_PATH', image_util)
+        self.assertIn('FileProvider.getUriForFile(', image_util)
+        self.assertNotIn('PermissionUtils.WRITE_EXTERNAL_STORAGE', image_util)
+        self.assertNotIn('downloadBelowQ', image_util)
         self.assertIn('val enabled: Boolean = false', source('security/PublicationPolicy.kt'))
         self.assertIn('if (!PublicationPolicy.enabled)', source('ui/page/reply/ReplyPage.kt'))
 

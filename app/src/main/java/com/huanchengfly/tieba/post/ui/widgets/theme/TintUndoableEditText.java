@@ -3,7 +3,6 @@ package com.huanchengfly.tieba.post.ui.widgets.theme;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.drawable.Drawable;
-import android.os.Build;
 import android.util.AttributeSet;
 
 import com.huanchengfly.tieba.post.R;
@@ -60,14 +59,12 @@ public class TintUndoableEditText extends UndoableEditText implements Tintable {
             setHintTextColor(ColorStateListUtils.createColorStateList(getContext(), mHintTextColorResId));
         }
         if (mCursorColorResId != 0) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                Drawable drawable;
-                drawable = getTextCursorDrawable();
-                if (drawable == null) {
-                    return;
-                }
-                setTextCursorDrawable(ThemeUtils.tintDrawable(drawable, ColorStateListUtils.createColorStateList(getContext(), mCursorColorResId)));
+            Drawable drawable;
+            drawable = getTextCursorDrawable();
+            if (drawable == null) {
+                return;
             }
+            setTextCursorDrawable(ThemeUtils.tintDrawable(drawable, ColorStateListUtils.createColorStateList(getContext(), mCursorColorResId)));
         }
     }
 

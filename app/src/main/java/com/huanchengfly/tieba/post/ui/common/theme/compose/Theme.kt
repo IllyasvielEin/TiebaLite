@@ -1,7 +1,6 @@
 package com.huanchengfly.tieba.post.ui.common.theme.compose
 
 import android.annotation.SuppressLint
-import android.os.Build
 import androidx.compose.material.Colors
 import androidx.compose.material.ContentAlpha
 import androidx.compose.material.MaterialTheme
@@ -465,9 +464,7 @@ fun TiebaLiteTheme(
         }
     }
 
-    val extendedColors = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-        isDynamicTheme && !ThemeUtil.isTranslucentTheme(theme)
-    ) {
+    val extendedColors = if (isDynamicTheme && !ThemeUtil.isTranslucentTheme(theme)) {
         getDynamicColor(theme, dynamicTonalPalette(context))
     } else {
         getThemeColorForTheme(theme)

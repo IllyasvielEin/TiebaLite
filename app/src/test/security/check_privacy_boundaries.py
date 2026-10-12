@@ -133,12 +133,13 @@ class PrivacyBoundaryChecks(unittest.TestCase):
                          'recyclerView.invalidateItemDecorations()', 'refreshView(((ViewGroup) view).getChildAt(i), extraRefreshable)'):
             self.assertIn(expected, source)
 
-    def test_dynamic_palette_has_direct_platform_guard(self):
+    def test_dynamic_palette_keeps_user_choice_and_translucent_fallback(self):
+        gradle = (MAIN.parents[1] / 'build.gradle.kts').read_text()
+        self.assertIn('minSdk = 35', gradle)
         source = (JAVA / 'ui/common/theme/compose/Theme.kt').read_text()
         branch = source[source.index('    val extendedColors = if ('):]
-        self.assertIn('Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&', branch)
         self.assertIn('isDynamicTheme && !ThemeUtil.isTranslucentTheme(theme)', branch)
-        self.assertLess(branch.index('Build.VERSION.SDK_INT'), branch.index('dynamicTonalPalette(context)'))
+        self.assertLess(branch.index('isDynamicTheme &&'), branch.index('dynamicTonalPalette(context)'))
         self.assertIn('} else {\n        getThemeColorForTheme(theme)', branch)
 
     def test_emoticon_entry_points_validate_ids(self):

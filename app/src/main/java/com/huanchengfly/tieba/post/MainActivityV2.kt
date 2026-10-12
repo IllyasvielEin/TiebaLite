@@ -9,7 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -286,7 +285,7 @@ class MainActivityV2 : BaseComposeActivity() {
     }
 
     private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && AccountUtil.isLoggedIn()) {
+        if (AccountUtil.isLoggedIn()) {
             requestPermission {
                 permissions = listOf(PermissionUtils.POST_NOTIFICATIONS)
                 description = getString(R.string.desc_permission_post_notifications)

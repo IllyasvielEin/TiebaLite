@@ -26,22 +26,18 @@ class ComposeCompatibilityChecks(unittest.TestCase):
                         'LocalContext.current requires its platform import',
                     )
 
-    def test_default_link_settings_guards_api31_and_falls_back(self):
+    def test_default_link_settings_keeps_ordered_vendor_fallback_on_min35(self):
+        gradle = (JAVA.parents[6] / 'build.gradle.kts').read_text()
+        self.assertRegex(gradle, r'minSdk\s*=\s*35\b')
         source = (JAVA / 'ui/page/settings/more/MoreSettingsPage.kt').read_text()
         helper = source.split('private fun openDefaultLinkSettings', 1)[1]
-        branches = re.search(
-            r'if \(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S\) \{(.*?)\} else \{(.*?)\}',
-            helper, re.S,
-        )
-        self.assertIsNotNone(branches)
-        modern, legacy = branches.groups()
-        self.assertIn('Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS', modern)
-        self.assertIn('Settings.ACTION_APPLICATION_DETAILS_SETTINGS', modern)
-        self.assertIn('Settings.ACTION_APPLICATION_DETAILS_SETTINGS', legacy)
-        self.assertNotIn('ACTION_APP_OPEN_BY_DEFAULT_SETTINGS', legacy)
+        actions = helper.split('val actions = listOf(', 1)[1].split(')', 1)[0]
+        self.assertLess(actions.index('Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS'),
+                        actions.index('Settings.ACTION_APPLICATION_DETAILS_SETTINGS'))
         self.assertIn('catch (_: ActivityNotFoundException)', helper)
         self.assertIn('for (action in actions)', helper)
         self.assertIn('Uri.parse("package:${context.packageName}")', helper)
+        self.assertIn('return false', helper)
         self.assertIn('if (!openDefaultLinkSettings(context))', source)
 
     def test_initial_intent_side_effect_is_deferred(self):

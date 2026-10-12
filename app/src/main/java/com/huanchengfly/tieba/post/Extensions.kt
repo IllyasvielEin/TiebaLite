@@ -9,7 +9,6 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.content.res.Configuration.SCREENLAYOUT_SIZE_MASK
-import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
@@ -140,21 +139,9 @@ fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-fun pendingIntentFlagMutable(): Int {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        PendingIntent.FLAG_MUTABLE
-    } else {
-        0
-    }
-}
+fun pendingIntentFlagMutable(): Int = PendingIntent.FLAG_MUTABLE
 
-fun pendingIntentFlagImmutable(): Int {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        PendingIntent.FLAG_IMMUTABLE
-    } else {
-        0
-    }
-}
+fun pendingIntentFlagImmutable(): Int = PendingIntent.FLAG_IMMUTABLE
 
 fun <T> ImmutableList<T>.removeAt(index: Int): ImmutableList<T> {
     return this.toMutableList().apply { removeAt(index) }.toImmutableList()

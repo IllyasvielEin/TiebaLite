@@ -10,12 +10,10 @@ import android.content.res.Resources
 import android.graphics.Color
 import android.graphics.ImageDecoder
 import android.graphics.drawable.Drawable
-import android.os.Build
 import android.os.Process
 import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.annotation.Keep
-import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.ui.graphics.toArgb
 import com.github.gzuliyujiang.oaid.DeviceID
@@ -54,7 +52,6 @@ import com.huanchengfly.tieba.post.utils.appPreferences
 import com.huanchengfly.tieba.post.utils.applicationMetaData
 import com.huanchengfly.tieba.post.utils.packageInfo
 import dagger.hilt.android.HiltAndroidApp
-import java.nio.ByteBuffer
 import kotlin.concurrent.thread
 import kotlinx.coroutines.runBlocking
 
@@ -63,13 +60,10 @@ import kotlinx.coroutines.runBlocking
 class App : Application(), SketchFactory {
     private val mActivityList: MutableList<Activity> = mutableListOf()
 
-    @RequiresApi(api = 28)
     private fun setWebViewPath(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val processName = getProcessName(context)
-            if (applicationContext.packageName != processName) { //判断不等于默认进程名称
-                WebView.setDataDirectorySuffix(processName!!)
-            }
+        val processName = getProcessName(context)
+        if (applicationContext.packageName != processName) { //判断不等于默认进程名称
+            WebView.setDataDirectorySuffix(processName!!)
         }
     }
 
@@ -87,9 +81,7 @@ class App : Application(), SketchFactory {
         INSTANCE = this
         super.onCreate()
         ClientUtils.init(this)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            setWebViewPath(this)
-        }
+        setWebViewPath(this)
         AccountUtil.init(this)
         Config.init(this)
         val isSelfBuild = applicationMetaData.getBoolean("is_self_build")
@@ -267,7 +259,7 @@ class App : Application(), SketchFactory {
             val resources = context.resources
             when (attrId) {
                 R.attr.colorPrimary -> {
-                    if (ThemeUtil.isDynamicTheme(theme) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (ThemeUtil.isDynamicTheme(theme)) {
                         val dynamicTonalPalette = dynamicTonalPalette(context)
                         return if (ThemeUtil.isNightMode(theme)) {
                             dynamicTonalPalette.primary80.toArgb()
@@ -295,7 +287,7 @@ class App : Application(), SketchFactory {
                 }
 
                 R.attr.colorNewPrimary -> {
-                    return if (ThemeUtil.isDynamicTheme(theme) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    return if (ThemeUtil.isDynamicTheme(theme)) {
                         val dynamicTonalPalette = dynamicTonalPalette(context)
                         if (ThemeUtil.isNightMode(theme)) {
                             dynamicTonalPalette.primary80.toArgb()
@@ -314,7 +306,7 @@ class App : Application(), SketchFactory {
                 }
 
                 R.attr.colorAccent -> {
-                    return if (ThemeUtil.isDynamicTheme(theme) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    return if (ThemeUtil.isDynamicTheme(theme)) {
                         val dynamicTonalPalette = dynamicTonalPalette(context)
                         if (ThemeUtil.isNightMode(theme)) {
                             dynamicTonalPalette.secondary80.toArgb()
@@ -824,13 +816,7 @@ class App : Application(), SketchFactory {
                                 dataSource.contentUri
                             )
 
-                            is ByteArrayDataSource -> {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                    ImageDecoder.createSource(dataSource.data)
-                                } else {
-                                    ImageDecoder.createSource(ByteBuffer.wrap(dataSource.data))
-                                }
-                            }
+                            is ByteArrayDataSource -> ImageDecoder.createSource(dataSource.data)
 
                             is BasedFileDataSource -> ImageDecoder.createSource(dataSource.getFile())
 

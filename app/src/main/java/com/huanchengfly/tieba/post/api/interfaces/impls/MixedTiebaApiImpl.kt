@@ -1,7 +1,6 @@
 package com.huanchengfly.tieba.post.api.interfaces.impls
 
 import com.huanchengfly.tieba.post.security.PublicationPolicy
-import android.os.Build
 import android.text.TextUtils
 import com.huanchengfly.tieba.post.App
 import com.huanchengfly.tieba.post.api.ClientVersion
@@ -776,21 +775,17 @@ object MixedTiebaApiImpl : ITiebaApi {
     override fun webUploadPic(photoInfoBean: PhotoInfoBean): Call<WebUploadPicBean> {
         PublicationPolicy.requireEnabled()
         var base64: String? = null
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            base64 = ImageUtil.imageToBase64(photoInfoBean.file)
-        } else {
-            try {
-                App.INSTANCE.contentResolver.openAssetFileDescriptor(
-                    photoInfoBean.fileUri,
-                    "r"
-                )?.use { afd ->
-                    base64 =
-                        ImageUtil.imageToBase64(FileInputStream(afd.parcelFileDescriptor.fileDescriptor))
-                }
-            } catch (e: IOException) {
-                e.printStackTrace()
-                base64 = null
+        try {
+            App.INSTANCE.contentResolver.openAssetFileDescriptor(
+                photoInfoBean.fileUri,
+                "r"
+            )?.use { afd ->
+                base64 =
+                    ImageUtil.imageToBase64(FileInputStream(afd.parcelFileDescriptor.fileDescriptor))
             }
+        } catch (e: IOException) {
+            e.printStackTrace()
+            base64 = null
         }
         return RetrofitTiebaApi.WEB_TIEBA_API.webUploadPic(base64)
     }

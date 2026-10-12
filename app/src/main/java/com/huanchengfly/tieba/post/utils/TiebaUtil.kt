@@ -7,7 +7,6 @@ import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.PersistableBundle
 import androidx.core.content.ContextCompat
 import com.huanchengfly.tieba.post.R
@@ -25,10 +24,8 @@ import java.util.Calendar
 
 object TiebaUtil {
     private fun ClipData.setIsSensitive(isSensitive: Boolean): ClipData = apply {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            description.extras = PersistableBundle().apply {
-                putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, isSensitive)
-            }
+        description.extras = PersistableBundle().apply {
+            putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, isSensitive)
         }
     }
 
@@ -43,9 +40,6 @@ object TiebaUtil {
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clipData = ClipData.newPlainText("Tieba Lite", text).setIsSensitive(isSensitive)
         cm.setPrimaryClip(clipData)
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
-            context.toastShort(toast)
-        }
     }
 
     fun initAutoSign(context: Context) {

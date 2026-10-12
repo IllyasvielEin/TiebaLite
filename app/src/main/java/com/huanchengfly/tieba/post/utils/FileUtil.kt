@@ -5,22 +5,17 @@ import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
-import android.os.Build
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.text.TextUtils
 import android.webkit.URLUtil
-import com.huanchengfly.tieba.post.R
-import com.huanchengfly.tieba.post.utils.PermissionUtils.PermissionData
-import com.huanchengfly.tieba.post.utils.PermissionUtils.askPermission
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
-import java.util.Arrays
 
 object FileUtil {
     const val FILE_TYPE_DOWNLOAD = 0
@@ -198,23 +193,7 @@ object FileUtil {
     }
 
     fun downloadBySystem(context: Context, fileType: Int, url: String?, fileName: String) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            downloadBySystemWithPermission(context, fileType, url, fileName)
-            return
-        }
-        askPermission(
-            context,
-            PermissionData(
-                Arrays.asList(
-                    PermissionUtils.READ_EXTERNAL_STORAGE,
-                    PermissionUtils.WRITE_EXTERNAL_STORAGE
-                ),
-                context.getString(R.string.tip_permission_storage_download)
-            )
-        ) {
-            downloadBySystemWithPermission(context, fileType, url, fileName)
-            null
-        }
+        downloadBySystemWithPermission(context, fileType, url, fileName)
     }
 
     @JvmStatic

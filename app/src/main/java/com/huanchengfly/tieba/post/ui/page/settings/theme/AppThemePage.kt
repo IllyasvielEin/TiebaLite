@@ -1,6 +1,5 @@
 package com.huanchengfly.tieba.post.ui.page.settings.theme
 
-import android.os.Build
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
@@ -323,50 +322,48 @@ fun AppThemePage(
             LazyColumn(
                 modifier = Modifier.fillMaxWidth()
             ) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    item {
-                        val tonalPalette = remember { dynamicTonalPalette(context) }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(
-                                    brush = Brush.sweepGradient(
-                                        colors = listOf(
-                                            tonalPalette.primary50,
-                                            tonalPalette.secondary50,
-                                            tonalPalette.tertiary50,
-                                            tonalPalette.primary50,
-                                        )
+                item {
+                    val tonalPalette = remember { dynamicTonalPalette(context) }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(
+                                brush = Brush.sweepGradient(
+                                    colors = listOf(
+                                        tonalPalette.primary50,
+                                        tonalPalette.secondary50,
+                                        tonalPalette.tertiary50,
+                                        tonalPalette.primary50,
                                     )
                                 )
-                                .clickable {
-                                    ThemeUtil.setUseDynamicTheme(true)
-                                }
-                                .padding(all = 16.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            ) {
-                                Icon(
-                                    imageVector = if (isDynamicTheme) {
-                                        Icons.Rounded.Check
-                                    } else {
-                                        Icons.Rounded.Colorize
-                                    },
-                                    contentDescription = null,
-                                    tint = ExtendedTheme.colors.windowBackground
-                                )
-                                Text(
-                                    text = stringResource(id = R.string.title_dynamic_theme),
-                                    fontWeight = FontWeight.Bold,
-                                    color = ExtendedTheme.colors.windowBackground
-                                )
+                            )
+                            .clickable {
+                                ThemeUtil.setUseDynamicTheme(true)
                             }
+                            .padding(all = 16.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            Icon(
+                                imageVector = if (isDynamicTheme) {
+                                    Icons.Rounded.Check
+                                } else {
+                                    Icons.Rounded.Colorize
+                                },
+                                contentDescription = null,
+                                tint = ExtendedTheme.colors.windowBackground
+                            )
+                            Text(
+                                text = stringResource(id = R.string.title_dynamic_theme),
+                                fontWeight = FontWeight.Bold,
+                                color = ExtendedTheme.colors.windowBackground
+                            )
                         }
                     }
                 }

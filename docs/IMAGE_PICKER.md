@@ -51,9 +51,12 @@ are simply no longer consulted; no user settings store or draft data is deleted.
 The app no longer declares READ_MEDIA_IMAGES. It does not need
 READ_MEDIA_VISUAL_USER_SELECTED because it no longer maintains a permission-based
 in-app gallery. READ_EXTERNAL_STORAGE and WRITE_EXTERNAL_STORAGE remain with
-existing SDK caps: the old-device image/file download paths still request them.
-Those unrelated paths were not redesigned in this migration. The final merged
-manifest must still be checked during Android build validation.
+their existing maximum SDK levels (32 and 28), below the supported minimum of
+API 35. Downloads now directly use the existing MediaStore and DownloadManager
+paths selected on supported versions; the unreachable pre-Q image writer and
+storage-permission prompts have been removed. Image sharing still uses
+FileProvider and a read-URI grant. The final merged manifest must still be checked
+during Android build validation.
 
 ## Verification
 

@@ -1,7 +1,6 @@
 package com.huanchengfly.tieba.post.utils
 
 import android.annotation.SuppressLint
-import android.os.Build
 import android.provider.Settings
 import android.text.TextUtils
 import com.huanchengfly.tieba.post.App
@@ -58,12 +57,7 @@ object UIDUtil {
     val cUID: String
         get() {
             val androidId = androidId
-            var imei = MobileInfoUtil.getIMEI(INSTANCE)
-            if (TextUtils.isEmpty(imei)) {
-                imei = "0"
-            }
-            val raw =
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) imei + androidId + uUID else "com.baidu$androidId"
+            val raw = "com.baidu$androidId"
             return raw.toMD5().uppercase()
         }
 

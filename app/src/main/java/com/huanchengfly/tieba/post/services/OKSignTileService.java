@@ -1,12 +1,10 @@
 package com.huanchengfly.tieba.post.services;
 
-import android.annotation.TargetApi;
 import android.service.quicksettings.Tile;
 import android.service.quicksettings.TileService;
 
 import com.huanchengfly.tieba.post.utils.TiebaUtil;
 
-@TargetApi(24)
 public class OKSignTileService extends TileService {
     @Override
     public void onStartListening() {

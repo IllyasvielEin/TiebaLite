@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
-import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
@@ -260,7 +259,7 @@ object ThemeUtil {
             } else {
                 THEME_TRANSLUCENT_LIGHT
             }
-        } else if (checkDynamic && isUsingDynamicTheme() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        } else if (checkDynamic && isUsingDynamicTheme()) {
             nowTheme = "${nowTheme}_dynamic"
         }
         return nowTheme

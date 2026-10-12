@@ -1,6 +1,5 @@
 package com.huanchengfly.tieba.post.ui.page
 
-import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -23,10 +22,6 @@ import kotlin.reflect.full.declaredMemberProperties
 @Destination
 @Composable
 fun MonetTestPage() {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-        Text(text = "Only available on Android 12+")
-        return
-    }
     val context = LocalContext.current
     val tonalPalette = remember { dynamicTonalPalette(context) }
     val properties = remember {

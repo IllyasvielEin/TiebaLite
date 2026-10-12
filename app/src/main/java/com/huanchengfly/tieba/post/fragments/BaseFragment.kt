@@ -1,9 +1,6 @@
 package com.huanchengfly.tieba.post.fragments
 
-import android.annotation.TargetApi
-import android.app.Activity
 import android.content.Context
-import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -77,18 +74,9 @@ abstract class BaseFragment<VB : ViewBinding> : Fragment(), BackHandledInterface
     protected val appPreferences: AppPreferencesUtils
         get() = AppPreferencesUtils.getInstance(attachContext)
 
-    @TargetApi(23)
     override fun onAttach(context: Context) {
         super.onAttach(context)
         onAttachToContext(context)
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onAttach(activity: Activity) {
-        super.onAttach(activity)
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            onAttachToContext(activity)
-        }
     }
 
     @CallSuper

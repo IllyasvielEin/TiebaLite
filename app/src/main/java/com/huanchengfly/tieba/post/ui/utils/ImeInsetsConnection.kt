@@ -1,14 +1,12 @@
 package com.huanchengfly.tieba.post.ui.utils
 
 import android.graphics.Insets
-import android.os.Build
 import android.os.CancellationSignal
 import android.util.Log
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowInsetsAnimationControlListener
 import android.view.WindowInsetsAnimationController
-import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FloatDecayAnimationSpec
 import androidx.compose.animation.core.animateDecay
@@ -55,9 +53,6 @@ import kotlin.math.sign
 fun Modifier.imeNestedScroll(
     childScrollState: ScrollState,
 ): Modifier {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-        return this
-    }
     return composed(
         debugInspectorInfo {
             name = "imeNestedScroll"
@@ -73,9 +68,6 @@ fun Modifier.imeNestedScroll(
 internal fun rememberImeInsetsConnection(
     childScrollState: ScrollState,
 ): NestedScrollConnection {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-        return DoNothingNestedScrollConnection
-    }
     val isImeVisible = WindowInsets.isImeVisible
     val side = WindowInsetsSides.Bottom
     val layoutDirection = LocalLayoutDirection.current
@@ -98,13 +90,7 @@ internal fun rememberImeInsetsConnection(
     return connection
 }
 
-/**
- * A [NestedScrollConnection] that does nothing, for versions before R.
- */
-private object DoNothingNestedScrollConnection : NestedScrollConnection
-
 @OptIn(ExperimentalCoroutinesApi::class)
-@RequiresApi(Build.VERSION_CODES.R)
 private class ImeInsetsNestedScrollConnection(
     val view: View,
     val sideCalculator: SideCalculator,
@@ -438,7 +424,6 @@ private class ImeInsetsNestedScrollConnection(
  * at the top will show when dragging down, while an inset at the bottom will hide
  * when dragging down.
  */
-@RequiresApi(Build.VERSION_CODES.R)
 private interface SideCalculator {
     /**
      * Returns the insets value for the side that this [SideCalculator] is associated with.
