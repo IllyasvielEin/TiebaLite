@@ -3,12 +3,6 @@ pluginManagement {
         gradlePluginPortal()
         google()
         mavenCentral()
-        maven("https://maven.aliyun.com/repository/central")
-        maven("https://maven.aliyun.com/repository/jcenter")
-        maven("https://maven.aliyun.com/repository/google")
-        maven("https://maven.aliyun.com/repository/gradle-plugin")
-        maven("https://maven.aliyun.com/repository/public")
-        maven("https://jitpack.io")
     }
 }
 
@@ -17,10 +11,24 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven("https://maven.aliyun.com/repository/public")
-        maven("https://jitpack.io")
-        maven("https://developer.huawei.com/repo/")
-        maven("https://developer.hihonor.com/repo")
+        exclusiveContent {
+            forRepository { maven("https://jitpack.io") }
+            filter {
+                includeGroup("com.github.stoyan-vuchev")
+                includeGroup("com.github.gzu-liyujiang")
+                includeGroup("com.github.lwj1994")
+                includeGroup("com.github.getActivity")
+                includeGroup("com.github.yalantis")
+            }
+        }
+        exclusiveContent {
+            forRepository { maven("https://developer.huawei.com/repo/") }
+            filter { includeGroupByRegex("com\\.huawei\\..*") }
+        }
+        exclusiveContent {
+            forRepository { maven("https://developer.hihonor.com/repo") }
+            filter { includeGroupByRegex("com\\.hihonor\\..*") }
+        }
     }
 }
 

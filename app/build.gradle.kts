@@ -108,12 +108,8 @@ android {
             isDebuggable = false
             isJniDebuggable = false
             multiDexEnabled = true
-        }
-        all {
-            signingConfig =
-                if (signingConfigs.any { it.name == "config" })
-                    signingConfigs.getByName("config")
-                else signingConfigs.getByName("debug")
+            // Never silently sign a release with the disposable Android debug key.
+            signingConfig = signingConfigs.findByName("config")
         }
     }
     compileOptions {
@@ -145,6 +141,7 @@ android {
 }
 
 kotlin {
+    jvmToolchain(17)
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
     }

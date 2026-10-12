@@ -18,3 +18,8 @@
 
 + [Starry-OvO/aiotieba: Asynchronous I/O Client for Baidu Tieba](https://github.com/Starry-OvO/aiotieba)
 + [n0099/tbclient.protobuf: 百度贴吧客户端 Protocol Buffers 定义文件合集](https://github.com/n0099/tbclient.protobuf)
+
+## Personal learning build
+
+See [build and artifact instructions](docs/BUILDING.md) for the pinned toolchain,
+manual unsigned APK workflow, and signing limitations.
