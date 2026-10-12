@@ -70,7 +70,11 @@ source/artifact. There is no device installation, app launch, login, or producti
 posting in this workflow. Keep the original key for any future signed package;
 changing keys normally prevents updating an existing installation.
 
-Unit tests currently provide only the upstream example test. Lint and a release
-build improve build confidence but do not replace behavior tests or security
-review. Download artifacts before retention expires; there is intentionally no
+Unit tests include the upstream example and targeted privacy/security regressions.
+The workflow builds/tests and archives the experimental unsigned proof first, then
+runs full lint as a blocking quality gate. A downloadable APK does not mean lint
+passed: the current legacy code has outstanding lint findings. Sanitized lint and
+unit-test reports are uploaded separately even when the job fails. No lint errors
+are suppressed or automatically baselined. These checks do not replace behavior
+tests or security review; real-account login is not validated. Download artifacts before retention expires; there is intentionally no
 automatic permanent release archive.

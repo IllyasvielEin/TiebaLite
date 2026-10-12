@@ -31,7 +31,7 @@ class BuildMetadataTest(unittest.TestCase):
         self.assertIsInstance(metadata['working_tree_dirty'], bool)
         self.assertEqual(set(metadata), {
             'commit', 'working_tree_dirty', 'repository', 'run_id', 'run_attempt',
-            'signing', 'gradle', 'agp', 'kotlin', 'ksp', 'java', 'compile_sdk',
+            'signing', 'artifact_label', 'full_lint_status', 'gradle', 'agp', 'kotlin', 'ksp', 'java', 'compile_sdk',
             'build_tools',
         })
 

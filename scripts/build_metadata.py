@@ -19,6 +19,8 @@ metadata = {
     'run_id': os.environ.get('GITHUB_RUN_ID'),
     'run_attempt': os.environ.get('GITHUB_RUN_ATTEMPT'),
     'signing': 'unsigned',
+    'artifact_label': 'UNSIGNED-EXPERIMENTAL-not-login-validated',
+    'full_lint_status': 'not yet available at archive time; consult workflow and validation reports',
     'gradle': re.search(r'gradle-([0-9.]+)-bin\.zip', wrapper).group(1),
     'agp': versions['agp'],
     'kotlin': versions['kotlin'],
