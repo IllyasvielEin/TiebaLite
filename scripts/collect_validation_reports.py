@@ -14,6 +14,9 @@ PATTERNS = (
     'app/build/intermediates/lint_intermediate_text_report/release/**/lint-results-*.txt',
     'app/build/reports/tests/testReleaseUnitTest/**/*',
     'app/build/test-results/testReleaseUnitTest/*.xml',
+    'app/build/reports/dependencies/release-runtime.txt',
+    'app/build/reports/dependencies/wire-runtime.txt',
+    'app/build/reports/apk/identity-badging.txt',
 )
 
 

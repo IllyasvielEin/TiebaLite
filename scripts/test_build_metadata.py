@@ -32,7 +32,7 @@ class BuildMetadataTest(unittest.TestCase):
         self.assertEqual(set(metadata), {
             'commit', 'working_tree_dirty', 'repository', 'run_id', 'run_attempt',
             'signing', 'artifact_label', 'full_lint_status', 'gradle', 'agp', 'kotlin', 'ksp', 'java', 'compile_sdk',
-            'build_tools',
+            'build_tools', 'wire_catalog', 'min_sdk', 'target_sdk', 'application_id',
         })
 
 

@@ -25,8 +25,12 @@ metadata = {
     'agp': versions['agp'],
     'kotlin': versions['kotlin'],
     'ksp': versions['ksp'],
+    'wire_catalog': versions['wire'],
     'java': subprocess.check_output(['java', '-version'], stderr=subprocess.STDOUT, text=True).strip(),
     'compile_sdk': int(re.search(r'compileSdk\s*=\s*(\d+)', android).group(1)),
+    'min_sdk': int(re.search(r'minSdk\s*=\s*(\d+)', android).group(1)),
+    'target_sdk': int(re.search(r'targetSdk\s*=\s*(\d+)', android).group(1)),
+    'application_id': re.search(r'applicationId\s*=\s*"([^"]+)"', android).group(1),
     'build_tools': re.search(r'buildToolsVersion\s*=\s*"([^"]+)"', android).group(1),
 }
 Path(sys.argv[1]).write_text(json.dumps(metadata, indent=2) + '\n')

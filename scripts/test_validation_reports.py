@@ -57,6 +57,29 @@ class ValidationReportsTest(unittest.TestCase):
                 collect(root)
             self.assertEqual((target / 'keep.txt').read_text(), 'keep')
 
+    def test_only_fixed_dependency_evidence_names_are_archived(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            reports = root / 'app/build/reports/dependencies'
+            reports.mkdir(parents=True)
+            for name in ('release-runtime.txt', 'wire-runtime.txt', 'unrelated.txt'):
+                (reports / name).write_text('synthetic dependency evidence')
+            self.assertEqual(collect(root), 2)
+            archived = root / 'out/validation-reports/reports/dependencies'
+            self.assertEqual({p.name for p in archived.iterdir()},
+                             {'release-runtime.txt', 'wire-runtime.txt'})
+
+    def test_only_fixed_apk_evidence_name_is_archived(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            reports = root / 'app/build/reports/apk'
+            reports.mkdir(parents=True)
+            for name in ('identity-badging.txt', 'unrelated.txt'):
+                (reports / name).write_text('synthetic APK evidence')
+            self.assertEqual(collect(root), 1)
+            archived = root / 'out/validation-reports/reports/apk'
+            self.assertEqual({p.name for p in archived.iterdir()}, {'identity-badging.txt'})
+
 
 if __name__ == '__main__':
     unittest.main()

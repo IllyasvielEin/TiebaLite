@@ -3,8 +3,6 @@
 [plugins]
 
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-#kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
 kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
@@ -18,14 +16,13 @@ dependency-analysis = { id = "com.autonomousapps.dependency-analysis", version =
 room = "2.7.1"
 
 accompanist = "0.37.3"
-hilt = "2.58"
+hilt = "2.59.2"
 kotlin = "2.3.21"
 sketch = "3.3.2"
 wire = "6.4.5"
 
-agp = "8.13.2"
+agp = "9.1.1"
 ksp = "2.3.8"
-#ksp = "2.2.21-2.0.5"
 
 androidx-activity = "1.13.0"
 androidx-lifecycle = "2.10.0"

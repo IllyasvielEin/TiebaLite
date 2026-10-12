@@ -36,20 +36,12 @@ jobs:
           distribution: temurin
           java-version: '17.0.20+8'
 
-      - name: Check preinstalled Android SDK
+      - name: Install approved Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
-          for required in \
-            "$ANDROID_HOME/platforms/android-36/android.jar" \
-            "$ANDROID_HOME/build-tools/36.0.0/aapt2" \
-            "$ANDROID_HOME/build-tools/36.0.0/apksigner" \
-            "$ANDROID_HOME/licenses/android-sdk-license"; do
-            if ! test -s "$required"; then
-              echo "::error::Required preinstalled SDK file is missing: $required"
-              exit 1
-            fi
-          done
+          # Owner approved the linked Android SDK terms and these bounded packages.
+          python3 scripts/ensure_android_sdk.py build
           if test -e keystore.properties; then
             echo "::error::This unsigned workflow must not contain keystore.properties"
             exit 1
@@ -69,9 +61,26 @@ jobs:
           python3 scripts/test_validation_reports.py
           python3 scripts/test_signing_workflow.py
           python3 scripts/test_transport_security.py
+          python3 scripts/test_wire_resolution.py
+          python3 scripts/test_application_identity.py
+          python3 scripts/test_apk_identity.py
+          python3 scripts/test_android_toolchain.py
+          python3 scripts/test_android_sdk_setup.py
+          python3 scripts/test_media_lifecycle.py
           python3 app/src/test/security/check_privacy_boundaries.py
           python3 app/src/test/security/check_publication_boundaries.py
+          python3 app/src/test/security/check_protobuf_response_contracts.py
           python3 app/src/test/compatibility/check_compose_compatibility.py
+          python3 app/src/test/compatibility/check_image_picker.py
+
+      - name: Record and verify resolved Wire runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app/build/reports/dependencies
+          ./gradlew --no-daemon --console=plain :app:dependencies --configuration releaseRuntimeClasspath > app/build/reports/dependencies/release-runtime.txt
+          ./gradlew --no-daemon --console=plain :app:dependencyInsight --dependency com.squareup.wire --configuration releaseRuntimeClasspath > app/build/reports/dependencies/wire-runtime.txt
+          python3 scripts/verify_wire_resolution.py app/build/reports/dependencies/wire-runtime.txt
 
       - name: Test and build unsigned release
         run: ./gradlew --no-daemon --stacktrace :app:testReleaseUnitTest :app:assembleRelease
@@ -83,7 +92,10 @@ jobs:
           mkdir -p out/artifact
           find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -exec cp {} out/artifact/ \;
           compgen -G 'out/artifact/*.apk' > /dev/null
+          mkdir -p app/build/reports/apk
           for apk in out/artifact/*.apk; do
+            "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump badging "$apk" > app/build/reports/apk/identity-badging.txt
+            python3 scripts/verify_apk_identity.py app/build/reports/apk/identity-badging.txt
             if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$apk" >/dev/null 2>&1; then
               echo "Unexpected signed APK in unsigned learning workflow" >&2
               exit 1

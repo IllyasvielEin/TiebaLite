@@ -17,12 +17,12 @@ class PrivacyBoundaryChecks(unittest.TestCase):
         manifest = ET.parse(MAIN / 'AndroidManifest.xml').getroot()
         # This app currently has one applicationId for both debug/release. Fail if that changes.
         gradle = (MAIN.parents[1] / 'build.gradle.kts').read_text()
-        self.assertIn('applicationId = "com.huanchengfly.tieba.post"', gradle)
+        self.assertIn('applicationId = "io.github.illyasvielein.tiebalite"', gradle)
         self.assertNotIn('applicationIdSuffix', gradle)
         for service in manifest.find('application').findall('service'):
             process = service.get(ANDROID + 'process')
             if process:
-                name = 'com.huanchengfly.tieba.post' + process if process.startswith(':') else process
+                name = 'io.github.illyasvielein.tiebalite' + process if process.startswith(':') else process
                 expected.add(('root', 'app_webview_' + name))
         for mode in (legacy, modern.find('cloud-backup'), modern.find('device-transfer')):
             actual = {(node.get('domain'), node.get('path')) for node in mode.findall('exclude')}

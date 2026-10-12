@@ -7,7 +7,7 @@
         <exclude domain="database" path="tblite.db-journal" />
         <exclude domain="root" path="app_webview" />
         <!-- App.setWebViewPath uses the full process name for the :oksign process. -->
-        <exclude domain="root" path="app_webview_com.huanchengfly.tieba.post:oksign" />
+        <exclude domain="root" path="app_webview_io.github.illyasvielein.tiebalite:oksign" />
     <exclude
         domain="sharedpref"
         path="crash.xml" />

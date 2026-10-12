@@ -1,4 +1,4 @@
-import com.android.build.gradle.internal.api.BaseVariantOutputImpl
+import com.android.build.api.variant.HostTestBuilder
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
@@ -17,15 +17,15 @@ val keystoreProperties = Properties().apply {
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose.compiler)
-    //alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.wire)
 }
+
+// Opt-in isolated emulator fixtures; ordinary debug/release configuration stays unchanged.
 
 val sha: String? = System.getenv("GITHUB_SHA")
 val isCI: String? = System.getenv("CI")
@@ -56,12 +56,11 @@ ksp {
 
 android {
     buildToolsVersion = "36.0.0"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig {
-        applicationId = "com.huanchengfly.tieba.post"
-        minSdk = 23
-        //noinspection OldTargetApi
-        targetSdk = 36
+        applicationId = "io.github.illyasvielein.tiebalite"
+        minSdk = 35
+        targetSdk = 37
         versionCode = applicationVersionCode
         versionName = applicationVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -116,12 +115,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
         sourceCompatibility = JavaVersion.VERSION_17
     }
-    composeCompiler {
-        metricsDestination.set(layout.buildDirectory.dir("compose_metrics"))
-        reportsDestination.set(layout.buildDirectory.dir("compose_metrics"))
-
-        stabilityConfigurationFile.set(rootProject.layout.projectDirectory.file("compose_stability_configuration.txt").asFile)
-    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -129,15 +122,23 @@ android {
         }
     }
     namespace = "com.huanchengfly.tieba.post"
-    applicationVariants.configureEach {
-        val variant = this
-        outputs.configureEach {
-            val fileName =
-                "${variant.buildType.name}-${applicationVersionName}(${applicationVersionCode}).apk"
+}
 
-            (this as BaseVariantOutputImpl).outputFileName = fileName
-        }
+// Keep AGP's standard APK names and output-metadata.json as the artifact contract.
+// AGP 9.1 has no public VariantOutput.outputFileName; never cast to internal APIs.
+
+androidComponents {
+    beforeVariants(selector().all()) { variantBuilder ->
+        // AGP 9 otherwise creates unit tests only for the tested build type.
+        // Both local debug tests and the release CI gate must keep existing.
+        variantBuilder.hostTests[HostTestBuilder.UNIT_TEST_TYPE]?.enable = true
     }
+}
+
+composeCompiler {
+    metricsDestination.set(layout.buildDirectory.dir("compose_metrics"))
+    reportsDestination.set(layout.buildDirectory.dir("compose_metrics"))
+    stabilityConfigurationFile.set(rootProject.layout.projectDirectory.file("compose_stability_configuration.txt").asFile)
 }
 
 kotlin {
@@ -250,6 +251,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestRuntimeOnly(libs.androidx.test.runner)
+
 
     //Glide
     implementation(libs.glide.core)

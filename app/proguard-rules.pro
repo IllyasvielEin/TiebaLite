@@ -31,12 +31,12 @@
 -keep class **.R$* {*;}
 # 保留四大组件，自定义的Application等这些类不被混淆
 # -keep public class * extends android.app.Fragment
--keep public class * extends android.app.Activity
--keep public class * extends android.app.Application
--keep public class * extends android.app.Service
--keep public class * extends android.content.BroadcastReceiver
--keep public class * extends android.content.ContentProvider
--keep public class * extends android.preference.Preference
+-keep public class * extends android.app.Activity { <init>(); }
+-keep public class * extends android.app.Application { <init>(); }
+-keep public class * extends android.app.Service { <init>(); }
+-keep public class * extends android.content.BroadcastReceiver { <init>(); }
+-keep public class * extends android.content.ContentProvider { <init>(); }
+-keep public class * extends android.preference.Preference { <init>(); }
 
 # 保留在Activity中的方法参数是view的方法，
 # 这样以来我们在layout中写的onClick就不会被影响
@@ -133,8 +133,8 @@
 
 -dontwarn com.yanzhenjie.permission.**
 
--keep public class * implements com.bumptech.glide.module.GlideModule
--keep public class * extends com.bumptech.glide.module.AppGlideModule
+-keep public class * implements com.bumptech.glide.module.GlideModule { <init>(); }
+-keep public class * extends com.bumptech.glide.module.AppGlideModule { <init>(); }
 -keep public enum com.bumptech.glide.load.ImageHeaderParser$** {
   **[] $VALUES;
   public *;
