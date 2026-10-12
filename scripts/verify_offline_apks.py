@@ -74,7 +74,8 @@ def verify_dumps(role, permissions, badging, manifest):
         if (provider["attrs"].get("android:name") != "androidx.core.content.FileProvider" or
                 provider["attrs"].get("android:authorities") != APPLICATION_ID + ".smoke-fixtures"):
             raise ValueError("Exact synthetic-only provider is missing")
-        if "sdkVersion:'35'" not in badging or "targetSdkVersion:'37'" not in badging:
+        if (re.findall(r"(?m)^(?:minSdkVersion|sdkVersion):'([^']+)'", badging) != ['35'] or
+                re.findall(r"(?m)^targetSdkVersion:'([^']+)'", badging) != ['37']):
             raise ValueError("Smoke SDK bounds changed")
     return expected
 

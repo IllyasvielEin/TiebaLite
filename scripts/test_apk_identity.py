@@ -13,6 +13,13 @@ class ApkIdentityTest(unittest.TestCase):
     def test_expected_manifest(self):
         verify(BASE)
 
+    def test_current_aapt_minimum_sdk_spelling(self):
+        verify(BASE.replace("sdkVersion:'35'", "minSdkVersion:'35'"))
+
+    def test_duplicate_minimum_sdk_evidence_rejected(self):
+        with self.assertRaises(ValueError):
+            verify(BASE + "minSdkVersion:'35'\n")
+
     def test_changed_identity_or_sdk_or_label_rejected(self):
         for before, after in [('io.github.illyasvielein.tiebalite', 'com.huanchengfly.tieba.post'),
                               ("sdkVersion:'35'", "sdkVersion:'23'"),

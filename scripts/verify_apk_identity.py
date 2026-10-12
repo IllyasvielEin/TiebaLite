@@ -8,7 +8,7 @@ import sys
 def verify(text):
     required = {
         r"(?m)^package: name='([^']+)'": 'io.github.illyasvielein.tiebalite',
-        r"(?m)^sdkVersion:'([^']+)'": '35',
+        r"(?m)^(?:minSdkVersion|sdkVersion):'([^']+)'": '35',
         r"(?m)^targetSdkVersion:'([^']+)'": '37',
         r"(?m)^application-label:'([^']+)'": '贴吧 Lite',
     }

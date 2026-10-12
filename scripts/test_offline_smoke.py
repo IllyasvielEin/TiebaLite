@@ -23,6 +23,14 @@ class OfflineSmokeGuards(unittest.TestCase):
                              f'      A: android:name(0x01010003)="androidx.core.content.FileProvider"\n'
                              f'      A: android:authorities(0x01010018)="{APPLICATION_ID}.smoke-fixtures"\n')
 
+    def test_current_minimum_sdk_field_and_duplicate_rejection(self):
+        args = self.dumps()
+        args["badging"] = args["badging"].replace("sdkVersion:'35'", "minSdkVersion:'35'")
+        verify_dumps(**args)
+        args["badging"] += "sdkVersion:'35'\n"
+        with self.assertRaises(ValueError):
+            verify_dumps(**args)
+
     def test_both_packaged_permissions_must_be_absent(self):
         for role in ("target", "test"):
             args = self.dumps(role)
