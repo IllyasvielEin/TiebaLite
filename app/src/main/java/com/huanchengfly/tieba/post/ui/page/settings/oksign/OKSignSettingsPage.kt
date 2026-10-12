@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -69,6 +70,7 @@ fun OKSignSettingsPage(
         },
     ) { paddingValues ->
         val context = LocalContext.current
+        val resources = LocalResources.current
         val dataStore = context.dataStore
         val snackbarHostState = LocalSnackbarHostState.current
         PrefsScreen(
@@ -190,7 +192,7 @@ fun OKSignSettingsPage(
                                 context.requestIgnoreBatteryOptimizations()
                             } else {
                                 coroutineScope.launch {
-                                    snackbarHostState.showSnackbar(context.getString(R.string.toast_ignore_battery_optimization_already))
+                                    snackbarHostState.showSnackbar(resources.getString(R.string.toast_ignore_battery_optimization_already))
                                 }
                             }
                         }

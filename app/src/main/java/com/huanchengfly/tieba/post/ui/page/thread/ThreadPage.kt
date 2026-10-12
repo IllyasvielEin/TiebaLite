@@ -84,6 +84,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.buildAnnotatedString
@@ -672,6 +673,7 @@ fun ThreadPage(
     }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val resources = LocalResources.current
     val openBottomSheet = {
         coroutineScope.launch {
             bottomSheetState.show()
@@ -708,12 +710,12 @@ fun ThreadPage(
     }
     viewModel.onEvent<ThreadUiEvent.AddFavoriteSuccess> {
         scaffoldState.snackbarHostState.showSnackbar(
-            context.getString(R.string.message_add_favorite_success, it.floor)
+            resources.getString(R.string.message_add_favorite_success, it.floor)
         )
     }
     viewModel.onEvent<ThreadUiEvent.RemoveFavoriteSuccess> {
         scaffoldState.snackbarHostState.showSnackbar(
-            context.getString(R.string.message_remove_favorite_success)
+            resources.getString(R.string.message_remove_favorite_success)
         )
     }
 
@@ -858,8 +860,8 @@ fun ThreadPage(
     LaunchedEffect(Unit) {
         if (from == ThreadPageFrom.FROM_STORE && extra is ThreadPageFromStoreExtra && extra.maxPid != postId) {
             val result = scaffoldState.snackbarHostState.showSnackbar(
-                context.getString(R.string.message_store_thread_update, extra.maxFloor),
-                context.getString(R.string.button_load_new),
+                resources.getString(R.string.message_store_thread_update, extra.maxFloor),
+                resources.getString(R.string.button_load_new),
                 SnackbarDuration.Long
             )
             if (result == SnackbarResult.ActionPerformed) {

@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.AnnotatedString
@@ -121,6 +122,7 @@ fun BlockListPage(
     }
 
     val context = LocalContext.current
+    val resources = LocalResources.current
     val pagerState = rememberPagerState { 2 }
     val coroutineScope = rememberCoroutineScope()
     val blackList by viewModel.uiState.collectPartialAsState(
@@ -240,8 +242,8 @@ fun BlockListPage(
         viewModel.onEvent<BlockListUiEvent.Success> {
             snackBarHostState.showSnackbar(
                 when (it) {
-                    is BlockListUiEvent.Success.Add -> context.getString(R.string.toast_add_success)
-                    is BlockListUiEvent.Success.Delete -> context.getString(R.string.toast_delete_success)
+                    is BlockListUiEvent.Success.Add -> resources.getString(R.string.toast_add_success)
+                    is BlockListUiEvent.Success.Delete -> resources.getString(R.string.toast_delete_success)
                 }
             )
         }

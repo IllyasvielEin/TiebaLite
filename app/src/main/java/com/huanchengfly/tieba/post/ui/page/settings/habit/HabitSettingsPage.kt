@@ -25,7 +25,6 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
@@ -52,7 +51,6 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 fun HabitSettingsPage(
     navigator: DestinationsNavigator
 ) {
-    val context = LocalContext.current
     MyScaffold(
         backgroundColor = Color.Transparent,
         topBar = {
@@ -353,11 +351,11 @@ fun HabitSettingsPage(
                     title = stringResource(id = R.string.title_do_not_use_photo_picker),
                     summary = {
                         if (!isPhotoPickerAvailable()) {
-                            context.getString(R.string.summary_photo_picker_not_supported)
+                            stringResource(R.string.summary_photo_picker_not_supported)
                         } else if (it) {
-                            context.getString(R.string.summary_do_not_use_photo_picker)
+                            stringResource(R.string.summary_do_not_use_photo_picker)
                         } else {
-                            context.getString(R.string.summary_use_photo_picker)
+                            stringResource(R.string.summary_use_photo_picker)
                         }
                     },
                     defaultChecked = false,

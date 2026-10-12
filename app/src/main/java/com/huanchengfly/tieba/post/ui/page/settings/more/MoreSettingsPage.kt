@@ -1,7 +1,10 @@
 package com.huanchengfly.tieba.post.ui.page.settings.more
 
+import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -23,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
@@ -74,6 +78,7 @@ fun MoreSettingsPage(
     ) { paddingValues ->
         val snackbarHostState = LocalSnackbarHostState.current
         val context = LocalContext.current
+        val resources = LocalResources.current
         var cacheSize by remember { mutableStateOf("0.0B") }
         LaunchedEffect(Unit) {
             thread {
@@ -164,7 +169,7 @@ fun MoreSettingsPage(
                         coroutineScope.launch {
                             ImageCacheUtil.clearImageAllCache(context)
                             cacheSize = "0.0B"
-                            snackbarHostState.showSnackbar(context.getString(R.string.toast_clear_picture_cache_success))
+                            snackbarHostState.showSnackbar(resources.getString(R.string.toast_clear_picture_cache_success))
                         }
                     },
                     summary = stringResource(id = R.string.tip_cache, cacheSize)
@@ -184,10 +189,11 @@ fun MoreSettingsPage(
                     enabled = true,
                     title = stringResource(id = R.string.title_open_by_default),
                     onClick = {
-                        context.startActivity(
-                            Intent(Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS, Uri.parse("package:${context.packageName}"))
-                            .addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
-                        )
+                        if (!openDefaultLinkSettings(context)) {
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(resources.getString(R.string.toast_load_failed))
+                            }
+                        }
                     },
                     summary = stringResource(id = R.string.tip_open_by_default)
                 )
@@ -213,4 +219,25 @@ fun MoreSettingsPage(
             }
         }
     }
+}
+private fun openDefaultLinkSettings(context: Context): Boolean {
+    val actions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        listOf(
+            Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS,
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+        )
+    } else {
+        listOf(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+    }
+    for (action in actions) {
+        val intent = Intent(action, Uri.parse("package:${context.packageName}"))
+            .addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
+        try {
+            context.startActivity(intent)
+            return true
+        } catch (_: ActivityNotFoundException) {
+            // Some Android variants omit a settings screen; try the next supported action.
+        }
+    }
+    return false
 }

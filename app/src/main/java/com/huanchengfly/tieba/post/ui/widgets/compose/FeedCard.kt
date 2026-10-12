@@ -1073,7 +1073,7 @@ fun VideoPlayer(
         }
     )
     val fullScreen by (videoPlayerController as DefaultVideoPlayerController).collect { isFullScreen }
-    val videoPlayerContent =
+    val videoPlayerContent = remember(videoPlayerController) {
         movableContentOf { isFullScreen: Boolean, playerModifier: Modifier ->
             com.huanchengfly.tieba.post.ui.widgets.compose.video.VideoPlayer(
                 videoPlayerController = videoPlayerController,
@@ -1081,6 +1081,7 @@ fun VideoPlayer(
                 backgroundColor = if (isFullScreen) Color.Black else Color.Transparent
             )
         }
+    }
 
     if (fullScreen) {
         Spacer(

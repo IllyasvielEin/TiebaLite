@@ -15,7 +15,7 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,19 +79,19 @@ fun HistoryListPage(
         initial = emptyList()
     )
 
-    val context = LocalContext.current
+    val resources = LocalResources.current
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
     viewModel.onEvent<HistoryListUiEvent.Delete.Failure> {
         snackbarHostState.showSnackbar(
-            context.getString(
+            resources.getString(
                 R.string.delete_history_failure,
                 it.errorMsg
             )
         )
     }
     viewModel.onEvent<HistoryListUiEvent.Delete.Success> {
-        snackbarHostState.showSnackbar(context.getString(R.string.delete_history_success))
+        snackbarHostState.showSnackbar(resources.getString(R.string.delete_history_success))
     }
     val lazyListState = rememberLazyListState()
     Box(

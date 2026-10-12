@@ -285,23 +285,18 @@ internal fun ReplyPageContent(
     }
     val textLength by remember { derivedStateOf { curText.length } }
     val isTextEmpty by remember { derivedStateOf { curText.isEmpty() } }
-    var topTitle = when (replyType) {
-        ReplyType.TOPIC_THREAD -> context.getString(R.string.title_thread)
-        else -> context.getString(R.string.title_reply)
+    val topTitle = when (replyType) {
+        ReplyType.TOPIC_THREAD -> stringResource(R.string.title_thread)
+        else -> stringResource(R.string.title_reply)
     }
-    LaunchedEffect(replyType) {
-        topTitle = when (replyType) {
-            ReplyType.TOPIC_THREAD -> context.getString(R.string.title_thread)
-            else -> context.getString(R.string.title_reply)
-        }
+    val replyHint = when {
+        replyType == ReplyType.TOPIC_THREAD -> stringResource(R.string.tip_thread_content)
+        subPostId != null && subPostId != 0L && replyUserName != null ->
+            stringResource(R.string.hint_reply, replyUserName)
+        else -> stringResource(R.string.tip_reply)
     }
-    LaunchedEffect(replyType, editTextView) {
-        editTextView?.hint = when {
-            replyType == ReplyType.TOPIC_THREAD -> context.getString(R.string.tip_thread_content)
-            subPostId != null && subPostId != 0L && replyUserName != null ->
-                context.getString(R.string.hint_reply, replyUserName)
-            else -> context.getString(R.string.tip_reply)
-        }
+    LaunchedEffect(replyHint, editTextView) {
+        editTextView?.hint = replyHint
     }
     viewModel.onEvent<ReplyUiEvent.ReplySuccess> {
         if (it.expInc.isEmpty()) {

@@ -18,7 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -54,7 +54,7 @@ fun HistoryPage(
     val coroutineScope = rememberCoroutineScope()
     val scaffoldState = rememberScaffoldState()
 
-    val context = LocalContext.current
+    val resources = LocalResources.current
 
     MyScaffold(
         backgroundColor = Color.Transparent,
@@ -77,7 +77,7 @@ fun HistoryPage(
                             emitGlobalEvent(HistoryListUiEvent.DeleteAll)
                             launch {
                                 scaffoldState.snackbarHostState.showSnackbar(
-                                    context.getString(
+                                    resources.getString(
                                         R.string.toast_clear_success
                                     )
                                 )

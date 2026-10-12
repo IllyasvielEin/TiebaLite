@@ -29,7 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -73,7 +73,7 @@ fun GeneralTabListPage(
     navTabInfo: FrsTabInfo,
     viewModel: GeneralTabListViewModel = pageViewModel(),
 ) {
-    val context = LocalContext.current
+    val resources = LocalResources.current
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
     val coroutineScope = rememberCoroutineScope()
@@ -132,12 +132,12 @@ fun GeneralTabListPage(
     viewModel.onEvent<GeneralTabListUiEvent.AgreeFail> {
         coroutineScope.launch {
             val snackbarResult = snackbarHostState.showSnackbar(
-                message = context.getString(
+                message = resources.getString(
                     R.string.snackbar_agree_fail,
                     it.errorCode,
                     it.errorMsg
                 ),
-                actionLabel = context.getString(R.string.button_retry)
+                actionLabel = resources.getString(R.string.button_retry)
             )
             if (snackbarResult == SnackbarResult.ActionPerformed) {
                 viewModel.send(

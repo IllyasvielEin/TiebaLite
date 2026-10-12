@@ -88,13 +88,8 @@ fun LoginPage(
     var pageTitle by rememberSaveable {
         mutableStateOf("")
     }
-    val displayPageTitle by remember {
-        derivedStateOf {
-            pageTitle.ifEmpty {
-                context.getString(R.string.title_default)
-            }
-        }
-    }
+    val defaultPageTitle = stringResource(R.string.title_default)
+    val displayPageTitle = pageTitle.ifEmpty { defaultPageTitle }
     val currentHost by remember {
         derivedStateOf {
             webViewState.lastLoadedUrl?.toUri()?.host.orEmpty().lowercase()

@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -150,8 +151,9 @@ fun CustomSettingsPage(
                         LauncherIcons.NEW_ICON to {
                             Image(
                                 painter = rememberDrawablePainter(
-                                    drawable = LocalContext.current.getDrawable(
-                                        R.drawable.ic_launcher_new_round
+                                    drawable = LocalResources.current.getDrawable(
+                                        R.drawable.ic_launcher_new_round,
+                                        LocalContext.current.theme
                                     )
                                 ),
                                 contentDescription = "新图标",
@@ -161,8 +163,9 @@ fun CustomSettingsPage(
                         LauncherIcons.NEW_ICON_INVERT to {
                             Image(
                                 painter = rememberDrawablePainter(
-                                    drawable = LocalContext.current.getDrawable(
-                                        R.drawable.ic_launcher_new_invert_round
+                                    drawable = LocalResources.current.getDrawable(
+                                        R.drawable.ic_launcher_new_invert_round,
+                                        LocalContext.current.theme
                                     )
                                 ),
                                 contentDescription = "新图标（反色）",
@@ -172,8 +175,9 @@ fun CustomSettingsPage(
                         LauncherIcons.OLD_ICON to {
                             Image(
                                 painter = rememberDrawablePainter(
-                                    drawable = LocalContext.current.getDrawable(
-                                        R.drawable.ic_launcher_round
+                                    drawable = LocalResources.current.getDrawable(
+                                        R.drawable.ic_launcher_round,
+                                        LocalContext.current.theme
                                     )
                                 ),
                                 contentDescription = "旧图标",

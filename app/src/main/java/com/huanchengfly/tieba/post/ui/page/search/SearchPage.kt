@@ -184,7 +184,10 @@ fun SearchPage(
         if (it.keyword.isNotBlank()) emitGlobalEventSuspend(it)
     }
 
-    val pages by remember {
+    val newestSortTitle = stringResource(R.string.title_search_order_new)
+    val oldestSortTitle = stringResource(R.string.title_search_order_old)
+    val relevantSortTitle = stringResource(R.string.title_search_order_relevant)
+    val pages by remember(newestSortTitle, oldestSortTitle, relevantSortTitle) {
         derivedStateOf {
             persistentListOf(
                 SearchPageItem(
@@ -213,9 +216,9 @@ fun SearchPage(
                     },
                     supportSort = true,
                     sortTypes = persistentMapOf(
-                        context.getString(R.string.title_search_order_new) to SearchThreadSortType.SORT_TYPE_NEWEST,
-                        context.getString(R.string.title_search_order_old) to SearchThreadSortType.SORT_TYPE_OLDEST,
-                        context.getString(R.string.title_search_order_relevant) to SearchThreadSortType.SORT_TYPE_RELATIVE,
+                        newestSortTitle to SearchThreadSortType.SORT_TYPE_NEWEST,
+                        oldestSortTitle to SearchThreadSortType.SORT_TYPE_OLDEST,
+                        relevantSortTitle to SearchThreadSortType.SORT_TYPE_RELATIVE,
                     ),
                     selectedSortType = { searchThreadSortType },
                     onSelectedSortTypeChange = { searchThreadSortType = it }

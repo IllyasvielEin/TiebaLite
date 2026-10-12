@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.ExperimentalTextApi
@@ -116,17 +117,18 @@ fun ThreadStorePage(
     val isError by remember { derivedStateOf { error != null } }
 
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scaffoldState = rememberScaffoldState()
     viewModel.onEvent<ThreadStoreUiEvent.Delete.Failure> {
         scaffoldState.snackbarHostState.showSnackbar(
-            context.getString(
+            resources.getString(
                 R.string.delete_store_failure,
                 it.errorMsg
             )
         )
     }
     viewModel.onEvent<ThreadStoreUiEvent.Delete.Success> {
-        scaffoldState.snackbarHostState.showSnackbar(context.getString(R.string.delete_store_success))
+        scaffoldState.snackbarHostState.showSnackbar(resources.getString(R.string.delete_store_success))
     }
     MyScaffold(
         backgroundColor = Color.Transparent,

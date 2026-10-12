@@ -167,8 +167,8 @@ inline fun <INTENT : UiIntent, reified VM : BaseViewModel<INTENT, *, *, *>> page
     key: String? = null,
 ): VM {
     return pageViewModel<VM>(key = key).apply {
-        if (initialIntent.isNotEmpty()) {
-            if (!initialized) {
+        LaunchedEffect(this, initialIntent) {
+            if (initialIntent.isNotEmpty() && !initialized) {
                 initialized = true
                 initialIntent.asFlow()
                     .onEach(this@apply::send)

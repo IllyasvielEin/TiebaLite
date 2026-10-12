@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -77,8 +78,9 @@ fun AboutPage(
                 Column(modifier = Modifier.align(Alignment.Center)) {
                     Image(
                         painter = rememberDrawablePainter(
-                            drawable = LocalContext.current.getDrawable(
-                                R.mipmap.ic_launcher_new
+                            drawable = LocalResources.current.getDrawable(
+                                R.mipmap.ic_launcher_new,
+                                LocalContext.current.theme
                             )
                         ),
                         contentDescription = null,

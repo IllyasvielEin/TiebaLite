@@ -69,6 +69,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -376,6 +377,7 @@ fun ForumPage(
     navigator: DestinationsNavigator
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     LazyLoad(loaded = viewModel.initialized) {
         viewModel.send(ForumUiIntent.Load(forumName, getSortType(context, forumName)))
         viewModel.initialized = true
@@ -385,7 +387,7 @@ fun ForumPage(
     val snackbarHostState = scaffoldState.snackbarHostState
     viewModel.onEvent<ForumUiEvent.SignIn.Success> {
         snackbarHostState.showSnackbar(
-            message = context.getString(
+            message = resources.getString(
                 R.string.toast_sign_success,
                 "${it.signBonusPoint}",
                 "${it.userSignRank}"
@@ -394,7 +396,7 @@ fun ForumPage(
     }
     viewModel.onEvent<ForumUiEvent.SignIn.Failure> {
         snackbarHostState.showSnackbar(
-            message = context.getString(
+            message = resources.getString(
                 R.string.toast_sign_failed,
                 it.errorMsg
             )
@@ -402,7 +404,7 @@ fun ForumPage(
     }
     viewModel.onEvent<ForumUiEvent.Like.Success> {
         snackbarHostState.showSnackbar(
-            message = context.getString(
+            message = resources.getString(
                 R.string.toast_like_success,
                 it.memberSum,
             )
@@ -410,7 +412,7 @@ fun ForumPage(
     }
     viewModel.onEvent<ForumUiEvent.Like.Failure> {
         snackbarHostState.showSnackbar(
-            message = context.getString(
+            message = resources.getString(
                 R.string.toast_like_failed,
                 it.errorMsg
             )
@@ -418,14 +420,14 @@ fun ForumPage(
     }
     viewModel.onEvent<ForumUiEvent.Unlike.Success> {
         snackbarHostState.showSnackbar(
-            message = context.getString(
+            message = resources.getString(
                 R.string.toast_unlike_success
             )
         )
     }
     viewModel.onEvent<ForumUiEvent.Unlike.Failure> {
         snackbarHostState.showSnackbar(
-            message = context.getString(
+            message = resources.getString(
                 R.string.toast_unlike_failed,
                 it.errorMsg
             )
@@ -508,7 +510,7 @@ fun ForumPage(
             val (forum) = forumInfo as ImmutableHolder<ForumInfo>
             HistoryUtil.saveHistory(
                 History(
-                    title = context.getString(R.string.title_forum, forum.name),
+                    title = resources.getString(R.string.title_forum, forum.name),
                     timestamp = System.currentTimeMillis(),
                     avatar = forum.avatar,
                     type = HistoryUtil.TYPE_FORUM,
@@ -624,7 +626,7 @@ fun ForumPage(
                                                 onSuccess = {
                                                     coroutineScope.launch {
                                                         snackbarHostState.showSnackbar(
-                                                            message = context.getString(
+                                                            message = resources.getString(
                                                                 R.string.toast_send_to_desktop_success
                                                             )
                                                         )
@@ -633,7 +635,7 @@ fun ForumPage(
                                                 onFailure = {
                                                     coroutineScope.launch {
                                                         snackbarHostState.showSnackbar(
-                                                            message = context.getString(
+                                                            message = resources.getString(
                                                                 R.string.toast_send_to_desktop_failed,
                                                                 it
                                                             )
