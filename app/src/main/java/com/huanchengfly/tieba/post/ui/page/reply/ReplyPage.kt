@@ -4,7 +4,6 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.util.Log
 import android.view.View
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -279,7 +278,6 @@ internal fun ReplyPageContent(
             .sample(500)
             .distinctUntilChanged()
             .collect {
-                Log.i("ReplyPage", "collect: $it")
                 if (!replySuccess) {
                     DatabaseUtil.saveDraft(hash, it)
                 }

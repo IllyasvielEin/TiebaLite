@@ -32,4 +32,7 @@ data class Account @JvmOverloads constructor(
     @ColumnInfo(name = "loadsuccess") var loadSuccess: Boolean = false,
     var uuid: String? = "",
     var zid: String? = "",
-)
+) {
+    // Account objects can appear inside UI events and error messages. Never stringify session data.
+    override fun toString(): String = "Account(id=$id, credentials=[REDACTED])"
+}

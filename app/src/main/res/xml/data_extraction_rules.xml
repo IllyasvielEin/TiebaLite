@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules xmlns:tools="http://schemas.android.com/tools">
     <cloud-backup>
+        <!-- Sessions must be re-created after restore; keep unrelated preferences/files backed up. -->
+        <exclude domain="database" path="tblite.db" />
+        <exclude domain="database" path="tblite.db-wal" />
+        <exclude domain="database" path="tblite.db-shm" />
+        <exclude domain="database" path="tblite.db-journal" />
+        <exclude domain="root" path="app_webview" />
+        <!-- App.setWebViewPath uses the full process name for the :oksign process. -->
+        <exclude domain="root" path="app_webview_com.huanchengfly.tieba.post:oksign" />
         <exclude
             domain="sharedpref"
             path="crash.xml" />
@@ -10,6 +18,14 @@
             tools:ignore="FullBackupContent" />
     </cloud-backup>
     <device-transfer>
+        <!-- Sessions must be re-created after restore; keep unrelated preferences/files backed up. -->
+        <exclude domain="database" path="tblite.db" />
+        <exclude domain="database" path="tblite.db-wal" />
+        <exclude domain="database" path="tblite.db-shm" />
+        <exclude domain="database" path="tblite.db-journal" />
+        <exclude domain="root" path="app_webview" />
+        <!-- App.setWebViewPath uses the full process name for the :oksign process. -->
+        <exclude domain="root" path="app_webview_com.huanchengfly.tieba.post:oksign" />
         <exclude
             domain="sharedpref"
             path="crash.xml" />

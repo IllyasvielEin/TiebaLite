@@ -185,7 +185,7 @@ fun launchUrl(
             )
             return
         }
-        if (host == "tieba.baidu.com" && path.startsWith("/p/")) {
+        if (TrustedWebHosts.isWebScheme(scheme) && host.equals("tieba.baidu.com", ignoreCase = true) && path.startsWith("/p/")) {
             val threadId = path.substring(3).toLongOrNull()
             if (threadId != null) {
                 navigator.navigate(
@@ -194,10 +194,7 @@ fun launchUrl(
             }
             return
         }
-        val isTiebaLink =
-            host.contains("tieba.baidu.com") || host.contains("wappass.baidu.com") || host.contains(
-                "ufosdk.baidu.com"
-            ) || host.contains("m.help.baidu.com")
+        val isTiebaLink = TrustedWebHosts.isWebScheme(scheme) && TrustedWebHosts.isInternalHost(host)
         if (isTiebaLink || context.appPreferences.useWebView) {
             navigator.navigate(
                 WebViewPageDestination(url)

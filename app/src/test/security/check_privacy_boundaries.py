@@ -1,0 +1,74 @@
+"""Source/XML regression checks; not a substitute for Android/JVM/runtime tests."""
+from pathlib import Path
+import unittest
+import xml.etree.ElementTree as ET
+
+MAIN = Path(__file__).resolve().parents[2] / 'main'
+JAVA = MAIN / 'java/com/huanchengfly/tieba/post'
+ANDROID = '{http://schemas.android.com/apk/res/android}'
+
+
+class PrivacyBoundaryChecks(unittest.TestCase):
+    def test_all_backup_modes_exclude_sessions(self):
+        legacy = ET.parse(MAIN / 'res/xml/backup_descriptor.xml').getroot()
+        modern = ET.parse(MAIN / 'res/xml/data_extraction_rules.xml').getroot()
+        expected = {('database', 'tblite.db' + suffix) for suffix in ('', '-wal', '-shm', '-journal')}
+        expected.add(('root', 'app_webview'))
+        manifest = ET.parse(MAIN / 'AndroidManifest.xml').getroot()
+        # This app currently has one applicationId for both debug/release. Fail if that changes.
+        gradle = (MAIN.parents[1] / 'build.gradle.kts').read_text()
+        self.assertIn('applicationId = "com.huanchengfly.tieba.post"', gradle)
+        self.assertNotIn('applicationIdSuffix', gradle)
+        for service in manifest.find('application').findall('service'):
+            process = service.get(ANDROID + 'process')
+            if process:
+                name = 'com.huanchengfly.tieba.post' + process if process.startswith(':') else process
+                expected.add(('root', 'app_webview_' + name))
+        for mode in (legacy, modern.find('cloud-backup'), modern.find('device-transfer')):
+            actual = {(node.get('domain'), node.get('path')) for node in mode.findall('exclude')}
+            self.assertTrue(expected <= actual)
+            self.assertFalse(any(path == '.' for _, path in actual), 'Keep unrelated user backups')
+
+    def test_install_permission_absent_and_shortcut_preserved(self):
+        root = ET.parse(MAIN / 'AndroidManifest.xml').getroot()
+        permissions = [node.get(ANDROID + 'name') for node in root.findall('uses-permission')]
+        self.assertNotIn('android.permission.REQUEST_INSTALL_PACKAGES', permissions)
+        activities = root.find('application').findall('activity')
+        sign = next(a for a in activities if a.get(ANDROID + 'name') == '.activities.OKSignActivity')
+        self.assertEqual('true', sign.get(ANDROID + 'exported'))
+        source = (JAVA / 'activities/OKSignActivity.java').read_text()
+        self.assertEqual(1, source.count('TiebaUtil.startSign(this);'))
+        positive = source.split('.setPositiveButton(', 1)[1].split('.setNegativeButton(', 1)[0]
+        self.assertIn('TiebaUtil.startSign(this);', positive)
+        self.assertIn('.setOnCancelListener(ignored -> finish())', source)
+        self.assertIn('setFilterTouchesWhenObscured(true)', source)
+
+    def test_event_logs_never_interpolate_payloads(self):
+        source = (JAVA / 'arch/BaseViewModel.kt').read_text()
+        for variable in ('it', 'event', 'intent'):
+            self.assertIn('${' + variable + '.javaClass.simpleName}', source)
+        self.assertNotIn('Log.i("ReplyPage", "collect: $it")', (JAVA / 'ui/page/reply/ReplyPage.kt').read_text())
+        account = (JAVA / 'models/database/Account.kt').read_text()
+        self.assertIn('override fun toString(): String = "Account(id=$id, credentials=[REDACTED])"', account)
+
+    def test_web_navigation_uses_exact_host_and_scheme_helpers(self):
+        web = (JAVA / 'ui/page/webview/WebViewPage.kt').read_text()
+        launch = (JAVA / 'utils/utils.kt').read_text()
+        self.assertIn('val isHttp = TrustedWebHosts.isWebScheme(scheme)', web)
+        self.assertIn('fun isInternalHost(host: String): Boolean = TrustedWebHosts.isInternalHost(host)', web)
+        self.assertIn('TrustedWebHosts.isWebScheme(scheme) && TrustedWebHosts.isInternalHost(host)', launch)
+        for source in (web, launch):
+            for host in ('tieba.baidu.com', 'wappass.baidu.com', 'ufosdk.baidu.com', 'm.help.baidu.com'):
+                self.assertNotIn('host.contains("' + host + '")', source)
+
+    def test_emoticon_entry_points_validate_ids(self):
+        source = (JAVA / 'utils/EmoticonManager.kt').read_text()
+        self.assertIn('emoticonCache.ids.filter { EmoticonCachePath.isValidId(it) }', source)
+        self.assertIn('emoticonCache.mapping.filterValues { EmoticonCachePath.isValidId(it) }', source)
+        self.assertIn('if (!EmoticonCachePath.isValidId(realId)) return', source)
+        self.assertIn('return EmoticonCachePath.resolve(getEmoticonCacheDir(), id)', source)
+        self.assertNotIn('File(getEmoticonCacheDir(), "$id.png")', source)
+
+
+if __name__ == '__main__':
+    unittest.main()

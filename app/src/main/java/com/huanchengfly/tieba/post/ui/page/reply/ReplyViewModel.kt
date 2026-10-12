@@ -130,8 +130,7 @@ class ReplyViewModel @Inject constructor() :
                     }
                     .onStart { emit(ReplyPartialChange.Send.Start) }
                     .catch {
-                        Log.i("ReplyViewModel", "failure: ${it.message}")
-                        it.printStackTrace()
+                        Log.i("ReplyViewModel", "failure: ${it.javaClass.simpleName}")
                         emit(
                             ReplyPartialChange.Send.Failure(
                                 it.getErrorCode(),
@@ -161,8 +160,7 @@ class ReplyViewModel @Inject constructor() :
                 }
                 .onStart { emit(ReplyPartialChange.Send.Start) }
                 .catch {
-                    Log.i("ReplyViewModel", "failure: ${it.message}")
-                    it.printStackTrace()
+                    Log.i("ReplyViewModel", "failure: ${it.javaClass.simpleName}")
                     emit(ReplyPartialChange.Send.Failure(it.getErrorCode(), it.getErrorMessage()))
                 }
         }
@@ -183,7 +181,6 @@ class ReplyViewModel @Inject constructor() :
                 }
                 .onStart { emit(ReplyPartialChange.UploadImages.Start) }
                 .catch {
-                    it.printStackTrace()
                     emit(
                         ReplyPartialChange.UploadImages.Failure(
                             it.getErrorCode(),

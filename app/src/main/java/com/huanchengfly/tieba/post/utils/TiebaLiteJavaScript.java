@@ -2,7 +2,6 @@ package com.huanchengfly.tieba.post.utils;
 
 import android.content.Context;
 import android.os.Handler;
-import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.widget.Toast;
@@ -47,7 +46,6 @@ public class TiebaLiteJavaScript {
                 .edit()
                 .putString(key, value)
                 .apply();
-        Log.i(TAG, "putString: " + key + ": " + value);
     }
 
     @JavascriptInterface
@@ -68,6 +66,5 @@ public class TiebaLiteJavaScript {
                 .edit()
                 .putInt(key, value)
                 .apply();
-        Log.i(TAG, "putInt: " + key + ": " + value);
     }
 }

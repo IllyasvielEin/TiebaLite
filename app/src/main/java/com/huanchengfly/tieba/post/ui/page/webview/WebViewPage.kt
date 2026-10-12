@@ -71,6 +71,7 @@ import com.huanchengfly.tieba.post.ui.widgets.compose.WebView
 import com.huanchengfly.tieba.post.ui.widgets.compose.rememberMenuState
 import com.huanchengfly.tieba.post.ui.widgets.compose.rememberSaveableWebViewState
 import com.huanchengfly.tieba.post.ui.widgets.compose.rememberWebViewNavigator
+import com.huanchengfly.tieba.post.utils.TrustedWebHosts
 import com.huanchengfly.tieba.post.utils.AccountUtil
 import com.huanchengfly.tieba.post.utils.DialogUtil
 import com.huanchengfly.tieba.post.utils.PermissionUtils
@@ -268,18 +269,9 @@ fun WebViewPage(
     }
 }
 
-fun isTiebaHost(host: String): Boolean {
-    return host == "wapp.baidu.com" ||
-            host.contains("tieba.baidu.com") ||
-            host == "tiebac.baidu.com"
-}
+fun isTiebaHost(host: String): Boolean = TrustedWebHosts.isTiebaHost(host)
 
-fun isInternalHost(host: String): Boolean {
-    return isTiebaHost(host) ||
-            host.contains("wappass.baidu.com") ||
-            host.contains("ufosdk.baidu.com") ||
-            host.contains("m.help.baidu.com")
-}
+fun isInternalHost(host: String): Boolean = TrustedWebHosts.isInternalHost(host)
 
 open class MyWebViewClient(
     protected val nativeNavigator: DestinationsNavigator? = null,
@@ -295,14 +287,9 @@ open class MyWebViewClient(
         val scheme = newUri.scheme?.lowercase() ?: return false
         val host = newUri.host?.lowercase() ?: return false
         val path = newUri.path?.lowercase() ?: return false
-        val isHttp = scheme.startsWith("http")
-        val isTieba = host == "wapp.baidu.com" ||
-                host.contains("tieba.baidu.com") ||
-                host == "tiebac.baidu.com"
-        val isInternal = isTieba ||
-                host.contains("wappass.baidu.com") ||
-                host.contains("ufosdk.baidu.com") ||
-                host.contains("m.help.baidu.com")
+        val isHttp = TrustedWebHosts.isWebScheme(scheme)
+        val isTieba = isTiebaHost(host)
+        val isInternal = isInternalHost(host)
         return when {
             isHttp && isTieba -> {
                 if (path == "/f" || path == "/mo/q/m") {

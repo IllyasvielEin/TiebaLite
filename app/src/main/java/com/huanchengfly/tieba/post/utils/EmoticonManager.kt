@@ -153,7 +153,8 @@ object EmoticonManager {
     fun init(context: Context) {
         contextRef = WeakReference(context)
         val emoticonCache = getEmoticonDataCache()
-        if (emoticonCache.ids.isEmpty()) {
+        val validIds = emoticonCache.ids.filter { EmoticonCachePath.isValidId(it) }
+        if (validIds.isEmpty()) {
             for (i in 1..50) {
                 emoticonIds.add("image_emoticon$i")
             }
@@ -164,12 +165,12 @@ object EmoticonManager {
                 emoticonIds.add("image_emoticon$i")
             }
         } else {
-            emoticonIds.addAll(emoticonCache.ids)
+            emoticonIds.addAll(validIds)
         }
         if (emoticonCache.mapping.isEmpty()) {
             emoticonMapping.putAll(DEFAULT_EMOTICON_MAPPING)
         } else {
-            emoticonMapping.putAll(emoticonCache.mapping)
+            emoticonMapping.putAll(emoticonCache.mapping.filterValues { EmoticonCachePath.isValidId(it) })
         }
         updateCache()
         coroutineScope.launch {
@@ -214,8 +215,8 @@ object EmoticonManager {
         }
     }
 
-    private fun getEmoticonFile(id: String): File {
-        return File(getEmoticonCacheDir(), "$id.png")
+    private fun getEmoticonFile(id: String): File? {
+        return EmoticonCachePath.resolve(getEmoticonCacheDir(), id)
     }
 
     fun getAllEmoticon(): List<Emoticon> {
@@ -247,9 +248,10 @@ object EmoticonManager {
     }
 
     fun getEmoticonDrawable(context: Context, id: String?): Drawable? {
-        if (id == null) {
+        if (!EmoticonCachePath.isValidId(id)) {
             return null
         }
+        id ?: return null
         if (drawableCache.containsKey(id)) {
             return drawableCache[id]
         }
@@ -257,7 +259,7 @@ object EmoticonManager {
         if (resId != 0) {
             return AppCompatResources.getDrawable(context, resId).also { drawableCache[id] = it!! }
         }
-        val emoticonFile = getEmoticonFile(id)
+        val emoticonFile = getEmoticonFile(id) ?: return null
         if (!emoticonFile.exists()) {
             return null
         }
@@ -269,11 +271,12 @@ object EmoticonManager {
 
     fun getEmoticonUri(context: Context, id: String?): String {
         id ?: return ""
+        if (!EmoticonCachePath.isValidId(id)) return ""
         val resId = getEmoticonResId(context, id)
         if (resId != 0) {
             return newResourceUri(resId)
         }
-        val emoticonFile = getEmoticonFile(id)
+        val emoticonFile = getEmoticonFile(id) ?: return ""
         if (!emoticonFile.exists()) {
             return ""
         }
@@ -296,7 +299,7 @@ object EmoticonManager {
     private suspend fun fetchEmoticons(context: Context) {
         emoticonIds.forEach {
             val resId = getEmoticonResId(context, it)
-            val emoticonFile = getEmoticonFile(it)
+            val emoticonFile = getEmoticonFile(it) ?: return@forEach
             if (resId == 0 && !emoticonFile.exists()) {
                 val loadEmoticonResult = LoadRequest(
                     context,
@@ -315,6 +318,7 @@ object EmoticonManager {
 
     fun registerEmoticon(id: String, name: String) {
         val realId = if (id == "image_emoticon") "image_emoticon1" else id
+        if (!EmoticonCachePath.isValidId(realId)) return
         var changed = false
         if (!emoticonIds.contains(realId)) {
             emoticonIds.add(realId)
