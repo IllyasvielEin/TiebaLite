@@ -19,6 +19,10 @@ object LiteApi {
             .addConverterFactory(NullOnEmptyConverterFactory())
             .addConverterFactory(GsonConverterFactory.create())
             .client(OkHttpClient.Builder().apply {
+                followSslRedirects(false)
+                cookieJar(okhttp3.CookieJar.NO_COOKIES)
+                addInterceptor(com.huanchengfly.tieba.post.api.retrofit.interceptors.AnonymousTransportInterceptor())
+                addNetworkInterceptor(com.huanchengfly.tieba.post.api.retrofit.interceptors.AnonymousTransportInterceptor())
                 addInterceptor(
                     CommonHeaderInterceptor(
                         Header.USER_AGENT to { System.getProperty("http.agent") },

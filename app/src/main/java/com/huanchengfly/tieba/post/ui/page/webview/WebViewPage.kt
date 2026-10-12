@@ -242,6 +242,7 @@ fun WebViewPage(
                     .padding(paddingValues),
                 navigator = webViewNavigator,
                 onCreated = {
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(it, false)
                     it.settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
@@ -423,14 +424,15 @@ open class MyWebViewClient(
     }
 
     open fun injectCookies(url: String) {
-        val cookieStr = CookieManager.getInstance().getCookie(url) ?: ""
-        val cookies = AccountUtil.parseCookie(cookieStr)
-        val BDUSS = cookies["BDUSS"]
-        val currentAccountBDUSS = AccountUtil.getBduss()
-        if (currentAccountBDUSS != null && BDUSS != currentAccountBDUSS) {
-            CookieManager.getInstance()
-                .setCookie(url, AccountUtil.getBdussCookie(currentAccountBDUSS))
-        }
+        val uri = Uri.parse(url)
+        if (!com.huanchengfly.tieba.post.security.CredentialTransportPolicy.permitsWebCookie(
+                uri.scheme, uri.host, uri.port, uri.userInfo
+            )) return
+        val manager = CookieManager.getInstance()
+        // Expire the broad legacy cookie even when its value matches the current account.
+        manager.setCookie("https://baidu.com/", "BDUSS=; Domain=.baidu.com; Path=/; Max-Age=0; Secure; HttpOnly")
+        val bduss = AccountUtil.getBduss() ?: return
+        manager.setCookie(url, AccountUtil.getBdussCookie(bduss))
     }
 
     override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {

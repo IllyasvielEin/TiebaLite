@@ -21,6 +21,10 @@ public class OkHttpLibraryGlideModule extends AppGlideModule {
     public void registerComponents(@NonNull Context context, @NonNull Glide glide, @NonNull Registry registry) {
         //添加拦截器到Glide
         OkHttpClient.Builder builder = new OkHttpClient.Builder();
+        builder.followSslRedirects(false);
+        builder.cookieJar(okhttp3.CookieJar.NO_COOKIES);
+        builder.addInterceptor(new com.huanchengfly.tieba.post.api.retrofit.interceptors.AnonymousTransportInterceptor(true));
+        builder.addNetworkInterceptor(new com.huanchengfly.tieba.post.api.retrofit.interceptors.AnonymousTransportInterceptor(false));
         builder.addInterceptor(new ProgressInterceptor());
         OkHttpClient okHttpClient = builder.build();
 

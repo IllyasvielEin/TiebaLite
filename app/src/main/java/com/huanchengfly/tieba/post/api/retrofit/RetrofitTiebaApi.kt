@@ -16,6 +16,7 @@ import com.huanchengfly.tieba.post.api.retrofit.interceptors.AddWebCookieInterce
 import com.huanchengfly.tieba.post.api.retrofit.interceptors.CommonHeaderInterceptor
 import com.huanchengfly.tieba.post.api.retrofit.interceptors.CommonParamInterceptor
 import com.huanchengfly.tieba.post.api.retrofit.interceptors.ConnectivityInterceptor
+import com.huanchengfly.tieba.post.api.retrofit.interceptors.CredentialTransportInterceptor
 import com.huanchengfly.tieba.post.api.retrofit.interceptors.CookieInterceptor
 import com.huanchengfly.tieba.post.api.retrofit.interceptors.DropInterceptor
 import com.huanchengfly.tieba.post.api.retrofit.interceptors.FailureResponseInterceptor
@@ -82,7 +83,7 @@ object RetrofitTiebaApi {
 
     val NEW_TIEBA_API: NewTiebaApi by lazy {
         createJsonApi<NewTiebaApi>(
-            "http://c.tieba.baidu.com/",
+            "https://tiebac.baidu.com/",
             defaultCommonHeaderInterceptor,
             CommonHeaderInterceptor(
                 Header.USER_AGENT to { "bdtb for Android 8.2.2" },
@@ -155,7 +156,7 @@ object RetrofitTiebaApi {
 
     val MINI_TIEBA_API: MiniTiebaApi by lazy {
         createJsonApi<MiniTiebaApi>(
-            "http://c.tieba.baidu.com/",
+            "https://tiebac.baidu.com/",
             defaultCommonHeaderInterceptor,
             CommonHeaderInterceptor(
                 Header.USER_AGENT to { "bdtb for Android 7.2.0.0" },
@@ -176,7 +177,7 @@ object RetrofitTiebaApi {
 
     val OFFICIAL_TIEBA_API: OfficialTiebaApi by lazy {
         createJsonApi<OfficialTiebaApi>(
-            "http://c.tieba.baidu.com/",
+            "https://tiebac.baidu.com/",
             CommonHeaderInterceptor(
                 Header.USER_AGENT to { "bdtb for Android ${ClientVersion.TIEBA_V12.version}" },
                 Header.COOKIE to { "CUID=${CuidUtils.getNewCuid()};ka=open;TBBRAND=${Build.MODEL};BAIDUID=${ClientUtils.baiduId};" },
@@ -380,7 +381,9 @@ object RetrofitTiebaApi {
             .addConverterFactory(json.asConverterFactory())
             .addConverterFactory(gsonConverterFactory)
             .client(OkHttpClient.Builder().apply {
-//                addInterceptor()
+                followRedirects(false)
+                followSslRedirects(false)
+                addInterceptor(CredentialTransportInterceptor("https://sofire.baidu.com/"))
                 connectionPool(connectionPool)
             }.build())
             .build()
@@ -398,6 +401,10 @@ object RetrofitTiebaApi {
         .addConverterFactory(json.asConverterFactory())
         .addConverterFactory(gsonConverterFactory)
         .client(OkHttpClient.Builder().apply {
+            // Keep OkHttp's platform certificate and hostname verification unchanged.
+            followRedirects(false)
+            followSslRedirects(false)
+            addInterceptor(CredentialTransportInterceptor(baseUrl))
             readTimeout(READ_TIMEOUT, TimeUnit.SECONDS)
             connectTimeout(CONNECT_TIMEOUT, TimeUnit.SECONDS)
             writeTimeout(WRITE_TIMEOUT, TimeUnit.SECONDS)
@@ -424,6 +431,10 @@ object RetrofitTiebaApi {
         .addConverterFactory(NullOnEmptyConverterFactory())
         .addConverterFactory(WireConverterFactory.create())
         .client(OkHttpClient.Builder().apply {
+            // Keep OkHttp's platform certificate and hostname verification unchanged.
+            followRedirects(false)
+            followSslRedirects(false)
+            addInterceptor(CredentialTransportInterceptor(baseUrl))
             readTimeout(READ_TIMEOUT, TimeUnit.SECONDS)
             connectTimeout(CONNECT_TIMEOUT, TimeUnit.SECONDS)
             writeTimeout(WRITE_TIMEOUT, TimeUnit.SECONDS)

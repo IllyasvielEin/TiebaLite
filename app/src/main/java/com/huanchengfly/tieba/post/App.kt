@@ -777,7 +777,14 @@ class App : Application(), SketchFactory {
     override fun createSketch(): Sketch = Sketch.Builder(this).apply {
         httpStack(OkHttpStack.Builder().apply {
             userAgent(System.getProperty("http.agent"))
-        }.build())
+            interceptors(com.huanchengfly.tieba.post.api.retrofit.interceptors.AnonymousTransportInterceptor(true))
+            networkInterceptors(com.huanchengfly.tieba.post.api.retrofit.interceptors.AnonymousTransportInterceptor())
+        }.build().let { stack ->
+            OkHttpStack(stack.okHttpClient.newBuilder()
+                .cookieJar(okhttp3.CookieJar.NO_COOKIES)
+                .followSslRedirects(false)
+                .build())
+        })
         components {
             addDrawableDecodeInterceptor(PauseLoadWhenScrollingDrawableDecodeInterceptor())
 

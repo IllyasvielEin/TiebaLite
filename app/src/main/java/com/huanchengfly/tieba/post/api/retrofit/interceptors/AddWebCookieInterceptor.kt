@@ -21,7 +21,9 @@ object AddWebCookieInterceptor : Interceptor {
                 .build()
         }
 
-        if (addCookie) {
+        if (addCookie && com.huanchengfly.tieba.post.security.CredentialTransportPolicy.permitsWebCookie(
+                httpUrl.scheme, httpUrl.host, httpUrl.port, httpUrl.username
+            )) {
             headers = headers.newBuilder()
                 .removeAll(Header.COOKIE)
                 .add(Header.COOKIE, AccountUtil.getCookie() ?: "")

@@ -152,7 +152,7 @@ object AccountUtil {
                 getAccountInfoByUid(loginBean.user.id)?.apply {
                     this.bduss = bduss
                     this.sToken = sToken
-                    this.cookie = cookie ?: getBdussCookie(bduss)
+                    this.cookie = cookie ?: "BDUSS=$bduss"
                     updateAccount(this, loginBean)
                 } ?: Account(
                     uid = loginBean.user.id,
@@ -161,7 +161,7 @@ object AccountUtil {
                     tbs = loginBean.anti.tbs,
                     portrait = loginBean.user.portrait,
                     sToken = sToken,
-                    cookie = cookie ?: getBdussCookie(bduss),
+                    cookie = cookie ?: "BDUSS=$bduss",
                 )
             }
             .zip(SofireUtils.fetchZid()) { account, zid ->
@@ -262,6 +262,6 @@ object AccountUtil {
     }
 
     fun getBdussCookie(bduss: String): String {
-        return "BDUSS=$bduss; Path=/; Max-Age=315360000; Domain=.baidu.com; Httponly"
+        return com.huanchengfly.tieba.post.security.CredentialTransportPolicy.bdussCookie(bduss)
     }
 }
