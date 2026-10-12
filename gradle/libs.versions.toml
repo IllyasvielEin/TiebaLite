@@ -193,7 +193,7 @@ github-matisse = { group = "com.github.lwj1994", name = "Matisse", version = "0.
 xx-permissions = { group = "com.github.getActivity", name = "XXPermissions", version = "26.8" }
 
 # ImmersionBar
-com-gyf-immersionbar-immersionbar = { group = "com.gyf.immersionbar", name = "immersionbar", version = "3.0.0" }
+com-gyf-immersionbar-immersionbar = { group = "com.geyifeng.immersionbar", name = "immersionbar", version = "3.3.3" }
 
 # UCrop
 com-github-yalantis-ucrop = { group = "com.github.yalantis", name = "ucrop", version = "2.2.11" }

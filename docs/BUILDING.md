@@ -16,11 +16,16 @@ AGP 9's built-in Kotlin and DSL changes are a separate migration, not required
 for this build repair. Do not update these components independently without
 checking compatibility and building again.
 
+The legacy JCenter-only ImmersionBar 3.0.0 dependency is migrated to the
+maintainer's Maven Central coordinate com.geyifeng.immersionbar:immersionbar:3.3.3.
+Its Java package remains com.gyf.immersionbar, so existing imports are retained.
+
 Official references:
 - https://docs.gradle.org/8.14.6/release-notes.html
 - https://gradle.org/release-checksums/
 - https://developer.android.com/build/releases/agp-8-13-0-release-notes
 - https://kotlinlang.org/docs/gradle-configure-project.html
+- https://github.com/gyf-dev/ImmersionBar
 
 ## Local verification
 
