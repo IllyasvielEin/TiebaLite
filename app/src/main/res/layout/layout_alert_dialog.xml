@@ -20,7 +20,7 @@
     android:id="@+id/parentPanel"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:gravity="start|left|top"
+    android:gravity="start|top"
     android:orientation="vertical"
     app:backgroundTint="@color/default_color_card"
     tools:ignore="PrivateResource">
@@ -37,7 +37,7 @@
             android:id="@+id/title_template"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical|start|left"
+            android:gravity="center_vertical|start"
             android:orientation="horizontal"
             android:paddingLeft="?attr/dialogPreferredPadding"
             android:paddingTop="@dimen/abc_dialog_padding_top_material"
@@ -48,7 +48,8 @@
                 android:layout_width="32dip"
                 android:layout_height="32dip"
                 android:layout_marginEnd="8dip"
-                android:layout_marginRight="8dip"
+                android:contentDescription="@null"
+                android:importantForAccessibility="no"
                 android:scaleType="fitCenter"
                 android:src="@null" />
 
