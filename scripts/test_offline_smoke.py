@@ -98,6 +98,8 @@ class OfflineSmokeGuards(unittest.TestCase):
         self.assertIn("workflow_dispatch:", source)
         self.assertIn("refs/heads/4.0-dev", source)
         self.assertIn("max-parallel: 1", source)
+        self.assertIn("kvm-diagnostics.txt", source)
+        self.assertIn("getfacl -p /dev/kvm", source)
         self.assertIn("retention-days: 3", source)
         self.assertNotIn("secrets.", source)
         self.assertNotIn("chmod", source)

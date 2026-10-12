@@ -53,6 +53,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out/smoke-reports
+          {
+            printf 'runner_uid='; id -u
+            printf 'runner_groups='; id -G
+            if test -e /dev/kvm; then
+              ls -ln /dev/kvm
+              if command -v getfacl >/dev/null; then getfacl -p /dev/kvm; fi
+            else
+              printf '/dev/kvm does not exist\n'
+            fi
+            for access in c r w; do
+              if test -"$access" /dev/kvm; then printf '%s=yes\n' "$access"; else printf '%s=no\n' "$access"; fi
+            done
+          } | tee out/smoke-reports/kvm-diagnostics.txt
           if ! test -c /dev/kvm || ! test -r /dev/kvm || ! test -w /dev/kvm; then
             echo 'Standard runner has no existing usable /dev/kvm access. No host security settings were changed.' | tee out/smoke-reports/kvm-blocker.txt
             exit 1
@@ -202,7 +215,7 @@ jobs:
           root = Path('out/smoke-reports')
           root.mkdir(parents=True, exist_ok=True)
           allowed = {'sdk-versions.json', 'acceleration.txt', 'device.txt', 'apk-verification.json',
-                     'summary.json', 'instrumentation.txt', 'kvm-blocker.txt', 'device-profile.txt'}
+                     'summary.json', 'instrumentation.txt', 'kvm-blocker.txt', 'kvm-diagnostics.txt', 'device-profile.txt'}
           allowed.update(f'{role}-{kind}.txt' for role in ('target', 'test')
                          for kind in ('permissions', 'badging', 'manifest'))
           for file in root.iterdir():
