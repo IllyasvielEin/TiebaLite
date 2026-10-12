@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 MAIN = Path(__file__).resolve().parents[2] / 'main'
 JAVA = MAIN / 'java/com/huanchengfly/tieba/post'
 ANDROID = '{http://schemas.android.com/apk/res/android}'
+TOOLS = '{http://schemas.android.com/tools}'
 
 
 class PrivacyBoundaryChecks(unittest.TestCase):
@@ -66,8 +67,18 @@ class PrivacyBoundaryChecks(unittest.TestCase):
         self.assertIn('return DEFAULT_IMEI;', source)
         self.assertNotIn('TelephonyManager', source)
         self.assertNotIn('getDeviceId', source)
-        permissions = ET.parse(MAIN / 'AndroidManifest.xml').getroot().findall('uses-permission')
-        self.assertFalse(any('PHONE_STATE' in node.get(ANDROID + 'name', '') for node in permissions))
+        root = ET.parse(MAIN / 'AndroidManifest.xml').getroot()
+        phone_permissions = [node for node in root
+                             if node.tag in ('uses-permission', 'uses-permission-sdk-23')
+                             and 'PHONE_STATE' in node.get(ANDROID + 'name', '')]
+        # A library manifest can restore an omitted permission during merging.
+        # Require an unconditional removal marker, not merely source absence.
+        self.assertEqual(1, len(phone_permissions))
+        removal = phone_permissions[0]
+        self.assertEqual('uses-permission', removal.tag)
+        self.assertEqual('android.permission.READ_PHONE_STATE', removal.get(ANDROID + 'name'))
+        self.assertEqual('remove', removal.get(TOOLS + 'node'))
+        self.assertNotIn(TOOLS + 'selector', removal.attrib)
 
     def test_custom_routes_remain_unverified_and_unchanged(self):
         app = ET.parse(MAIN / 'AndroidManifest.xml').getroot().find('application')
