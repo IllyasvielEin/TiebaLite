@@ -30,6 +30,7 @@ import com.huanchengfly.tieba.post.ui.common.theme.compose.ExtendedTheme
 import com.huanchengfly.tieba.post.ui.page.LocalNavigator
 import com.huanchengfly.tieba.post.ui.page.ProvideNavigator
 import com.huanchengfly.tieba.post.ui.page.destinations.AccountManagePageDestination
+import com.huanchengfly.tieba.post.ui.page.destinations.AvatarDiagnosticsPageDestination
 import com.huanchengfly.tieba.post.ui.page.destinations.BlockSettingsPageDestination
 import com.huanchengfly.tieba.post.ui.page.destinations.CustomSettingsPageDestination
 import com.huanchengfly.tieba.post.ui.page.destinations.HabitSettingsPageDestination
@@ -134,6 +135,14 @@ fun SettingsPage(
             ) {
                 prefsItem {
                     NowAccountItem(account = LocalAccount.current)
+                }
+                prefsItem {
+                    TextPref(
+                        title = stringResource(R.string.title_avatar_diagnostics),
+                        summary = stringResource(R.string.summary_avatar_diagnostics),
+                        darkenOnDisable = false,
+                        onClick = { navigator.navigate(AvatarDiagnosticsPageDestination) },
+                    )
                 }
                 prefsItem {
                     TextPref(

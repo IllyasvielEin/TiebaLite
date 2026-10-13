@@ -2,7 +2,8 @@ package com.huanchengfly.tieba.post.api.retrofit.interceptors
 
 import okhttp3.Interceptor
 import okhttp3.Response
-import java.io.IOException
+import com.huanchengfly.tieba.post.security.PublicDownloadPolicyException
+import com.huanchengfly.tieba.post.security.PublicDownloadPolicyException.Reason
 
 /** For image/public-download clients only; never share the authenticated API client/cookie jar. */
 class AnonymousTransportInterceptor(private val upgradeHttp: Boolean = false) : Interceptor {
@@ -10,14 +11,14 @@ class AnonymousTransportInterceptor(private val upgradeHttp: Boolean = false) : 
         val request = chain.request()
         var url = request.url
         if (request.method != "GET" && request.method != "HEAD") {
-            throw IOException("Public downloads cannot submit request bodies")
+            throw PublicDownloadPolicyException(Reason.METHOD)
         }
         if (url.username.isNotEmpty() || url.password.isNotEmpty() ||
             url.queryParameterNames.any { it.lowercase() in SECRET_QUERY_NAMES }) {
-            throw IOException("Credentials are not permitted in public download URLs")
+            throw PublicDownloadPolicyException(Reason.CREDENTIALS)
         }
         if (!url.isHttps) {
-            if (!upgradeHttp || url.port != 80) throw IOException("Insecure public download blocked")
+            if (!upgradeHttp || url.port != 80) throw PublicDownloadPolicyException(Reason.INSECURE_TRANSPORT)
             url = url.newBuilder().scheme("https").port(443).build()
         }
         val sanitized = request.newBuilder().url(url)

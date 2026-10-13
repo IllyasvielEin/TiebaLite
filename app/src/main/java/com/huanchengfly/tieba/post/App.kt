@@ -775,6 +775,7 @@ class App : Application(), SketchFactory {
             OkHttpStack(stack.okHttpClient.newBuilder()
                 .cookieJar(okhttp3.CookieJar.NO_COOKIES)
                 .followSslRedirects(false)
+                .eventListenerFactory(com.huanchengfly.tieba.post.diagnostics.AvatarDiagnostics.networkListenerFactory)
                 .build())
         })
         components {

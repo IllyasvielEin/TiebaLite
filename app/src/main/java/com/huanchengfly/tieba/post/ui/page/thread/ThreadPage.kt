@@ -2136,6 +2136,7 @@ fun PostCard(
                             avatar = {
                                 Avatar(
                                     data = StringUtil.getAvatarUrl(author.portrait),
+                                    diagnosticInputKind = com.huanchengfly.tieba.post.diagnostics.AvatarDiagnosticStore.classifyInput(author.portrait),
                                     size = Sizes.Small,
                                     contentDescription = stringResource(id = R.string.user_portrait)
                                 )
