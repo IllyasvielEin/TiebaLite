@@ -1,5 +1,6 @@
 """Host-only guards: these do NOT claim Android compilation or emulator success."""
 import pathlib
+import json
 import re
 import sys
 import tempfile
@@ -210,7 +211,21 @@ class OfflineSmokeGuards(unittest.TestCase):
         self.assertIn("workflow_dispatch:", source)
         self.assertIn("refs/heads/4.0-dev", source)
         self.assertIn("max-parallel: 1", source)
-        self.assertEqual(['37', '35'], re.findall(r'^          - api: (\d+)$', source, re.M))
+        self.assertIn("(inputs.api_scope == '37' || inputs.api_scope == '35-and-37')", source)
+        self.assertIn("default: '35-and-37'", source)
+        matrix = source.split("        include: ", 1)[1].splitlines()[0]
+        choices = re.findall(r"'(\[\{.*?\}\])'", matrix)
+        self.assertEqual(2, len(choices))
+        single, pair = map(json.loads, choices)
+        self.assertEqual([37], [row['api'] for row in single])
+        self.assertEqual([37, 35], [row['api'] for row in pair])
+        self.assertEqual(single[0], pair[0])
+        for row in pair:
+            level = '37.0' if row['api'] == 37 else '35'
+            self.assertEqual(f'system-images;android-{level};google_apis;x86_64', row['image'])
+            self.assertEqual(f'android-{level}/google_apis/x86_64', row['image_dir'])
+        self.assertIn('python3 scripts/test_install_termination.py', source)
+        self.assertIn("'install-termination.json'", source)
         self.assertIn('runs-on: ubuntu-24.04', source)
         self.assertIn("kvm-diagnostics.json", source)
         self.assertIn("kvm-restoration.json", source)

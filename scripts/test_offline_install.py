@@ -67,6 +67,7 @@ class InstallChecks(unittest.TestCase):
             return value
 
         with mock.patch.object(sys, "argv", argv), mock.patch.object(helper.subprocess, "run", side_effect=run), \
+                mock.patch.object(helper.termination, "start_metadata", return_value=helper.termination.unavailable_metadata(432)), \
                 mock.patch.object(helper.time, "monotonic", side_effect=clock.monotonic), \
                 mock.patch.object(helper.time, "sleep", side_effect=clock.sleep), \
                 contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):

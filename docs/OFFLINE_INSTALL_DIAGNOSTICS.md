@@ -72,9 +72,72 @@ unbounded history. UTF-8 replacement decoding and printable ASCII previews preve
 bytes from reaching terminal diagnostics. Each stdout/stderr preview is at most 128
 characters with original byte/character counts and exact omitted-character counts.
 Only previews are shortened to fit, starting with readiness/snapshot previews; numeric and
-status evidence is preserved. No logcat, raw emulator log, environment, secrets, APK bytes
-or app data are collected. Workflow report retention/allowlisting remains separate.
+status evidence is preserved. This report retains no logcat, raw emulator log,
+environment, secrets, APK bytes or app data. Workflow report retention/allowlisting remains separate.
 
-`python3 scripts/test_offline_install.py` exercises these guards with mocked subprocesses
-and a synthetic monotonic clock, including invalid byte streams. It does not prove actual
+## Failure-only termination signatures
+
+Run `38329127641` again reached two healthy API37 readiness samples (PID 1742), then the
+target install returned Broken pipe. Its bounded post-failure snapshot found no
+`system_server` PID and no package-service handle. This supports observed service/process
+loss after the failed install; it does not identify a Java exception, native signal or OOM.
+The API35 job passed all eleven cases. No raw API37 crash log was retained.
+
+`install_termination.py` adds a separate best-effort `install-termination.json`, capped at
+**4 KiB**, only after an actual target/test install attempt fails and the existing health
+snapshot finishes. Input/readiness failure, successful installs, failed post-success health
+or an install skipped for deadline exhaustion never trigger log collection. Diagnostic
+failure cannot replace the original install result, stage, report or nonzero return.
+
+After readiness and before the install sequence, two read-only **2-second** commands read
+`pidof zygote64 zygote` and `date +%s.%N`. The system-server PID comes from stable readiness;
+the zygote set must contain one or two distinct positive int32 PIDs. After failure another
+2-second guest date read closes the sequence-wide window. Strict numeric seconds/nanoseconds
+are required; missing, malformed, reversed or longer-than-210-second windows skip logcat.
+The report labels `window_scope=install_sequence`, so the failed role supplies context,
+not a claim that every observed event was caused by that single install command.
+
+The single fixed logcat query uses `-d`, only `main/system/crash`, explicit
+`threadtime,epoch,usec,printable`, silent defaults with `AndroidRuntime:E Zygote:I libc:F`,
+and `-t` with the validated decimal start epoch. Decimal time is important: a bare integer
+selects a line count. A dedicated nonblocking pipe reader stores at most **64 KiB stdout**
+in memory and immediately discards stderr content, counting at most **1 KiB**. Its
+**5-second** budget includes reserved kill/reap time. It has no temporary raw file,
+console echo, generic command previews or unbounded `communicate()`. These added commands
+share the 270-second deadline; ordinary command budgets total 266 seconds, preserving the
+five-minute step's report-writing margin. No SDK, transport, permissions or retry changes
+are involved.
+
+Only anchored, bounded formatted headers within the guest window are considered. Zygote
+templates must come from a captured zygote PID and reference the captured system-server
+child. Java/libc records require that actual header's system-server PID. The Java summary
+keeps only the system-process fatal marker and the first correlated throwable class within
+two seconds and sixteen lines, mapped to four `java.lang` exception enums or `other`.
+Nested causes, frames, messages, thread names, arbitrary class names, addresses and paths
+are not exported. Native evidence retains only a numeric signal; an explicit trailing
+crashed-process PID must match, distinct from a signal-sender PID in earlier details.
+Duplicate scalar facts deduplicate; conflicting scalar values become null and ambiguous.
+libc-observed and Zygote-termination signals remain separate facts without cause inference.
+
+The fixed JSON schema contains only role/window scope, validated PIDs, window duration,
+collection status/reason/exit/counts/timing and bounded booleans, numeric exit/signal values,
+an exception enum and ambiguity. Its writer rejects extra/free-form fields and unsafe
+symlink, hardlink or nonregular report destinations. Nonzero exit, any stderr warning,
+invalid UTF-8/format, partial records, caps or timeout leave evidence **null**, never a
+healthy/no-crash conclusion. A complete empty/unmatched result means only that no matching
+signature was found. Unsupported device formatting fails closed, without a broader query.
+
+Source-derived fixtures and format boundaries use the official
+[logcat options/time parser](https://android.googlesource.com/platform/system/logging/+/refs/heads/main/logcat/logcat.cpp),
+[logprint header and per-message-line prefixes](https://android.googlesource.com/platform/system/logging/+/refs/heads/main/liblog/logprint.cpp),
+[Zygote termination templates](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/core/jni/com_android_internal_os_Zygote.cpp),
+[RuntimeInit fatal marker](https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/core/java/com/android/internal/os/RuntimeInit.java),
+[debuggerd native signal summary](https://android.googlesource.com/platform/system/core/+/refs/heads/main/debuggerd/handler/debuggerd_handler.cpp)
+and [Toybox numeric date formats](https://raw.githubusercontent.com/landley/toybox/master/toys/posix/date.c).
+The invoked logcat comes from the system image, not host platform-tools. Actual API37/API35
+format validation still requires an authorized run.
+
+`python3 scripts/test_offline_install.py` and `python3 scripts/test_install_termination.py`
+exercise these guards with mocked adb calls, a synthetic clock and real local Python
+pipe cap/timeout/reap tests, including invalid byte streams. They do not prove actual
 API37/API35 installation or instrumentation success; that requires an authorized emulator run.

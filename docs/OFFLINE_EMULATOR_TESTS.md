@@ -4,8 +4,10 @@
 
 The manual **Offline Android emulator smoke tests** workflow can run only from the trusted
 `4.0-dev` default branch. It uses standard `ubuntu-24.04` runners, read-only repository
-permission, SHA-pinned actions and a two-entry matrix with `max-parallel: 1`. Both jobs
-require the default-false `allow_kvm_access` dispatch input to be explicitly enabled
+permission, SHA-pinned actions and a fixed matrix with `max-parallel: 1`.
+`api_scope` defaults to `35-and-37`; selecting `37` runs only the primary diagnostic.
+No arbitrary API, image or shell input is accepted. Every selected job
+requires the default-false `allow_kvm_access` dispatch input to be explicitly enabled
 under the owner's approval for that dispatch, and `github.run_attempt == 1`:
 
 - Primary: API 37, `system-images;android-37.0;google_apis;x86_64`
@@ -259,8 +261,10 @@ and failure paths but do not prove real hosted ACL restoration or emulator execu
 
 The workflow uploads only allowlisted small text/JSON reports for three days: package
 versions, acceleration result, device API, packaged-manifest proof and instrumentation
-results, plus numeric KVM diagnostics/restoration status and storage preflight measurements.
-KVM and storage reports are capped at 4 KiB and other files at 2 MiB. The private original ACL/state is never uploaded. It does
+results, plus numeric KVM diagnostics/restoration status, storage preflight measurements,
+and bounded installation diagnostics. A failure-only termination summary contains fixed
+parsed fields; raw guest log data is discarded in memory and never archived.
+KVM, storage and install reports are capped at 4 KiB and other files at 2 MiB. The private original ACL/state is never uploaded. It does
 not upload APKs, signing keys, raw emulator logs, logcat, screenshots, heap dumps, AVD
 snapshots or Android userdata.
 
@@ -270,6 +274,7 @@ Host checks (these do not need an SDK):
 python3 scripts/test_offline_smoke.py
 python3 scripts/test_emulator_storage.py
 python3 scripts/test_kvm_access.py
+python3 scripts/test_install_termination.py
 python3 app/src/test/compatibility/check_image_picker.py
 ```
 
@@ -296,3 +301,14 @@ before these explicit checks. Successful runtime reporting requires
 - [Official emulator data-partition option handling](https://android.googlesource.com/platform/external/qemu/+/emu-master-dev/android/android-emu/android/main-common.c)
 - [ActivityResultRegistry testing](https://developer.android.com/training/basics/intents/result#test)
 - [Compose StateRestorationTester](https://developer.android.com/reference/kotlin/androidx/compose/ui/test/junit4/StateRestorationTester)
+
+## Verified run at 9055b6c5
+
+[Run 38329127641](https://github.com/IllyasvielEin/TiebaLite/actions/runs/38329127641)
+passed all 11 API35 smoke cases, including actual Activity/Compose-owner background
+checks and the separate direct foreground-gate test. This does not establish why the
+older run failed. API37 passed APK, storage and package-readiness checks but its first
+installation failed; the subsequent sample found no system_server PID or package
+service. No API37 tests ran and the process-loss cause remains unknown. Both temporary
+KVM ACLs were restored and independently checked against the uploaded reports.
+A further dispatch requires approval for its selected temporary runner(s).

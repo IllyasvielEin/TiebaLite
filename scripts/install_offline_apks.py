@@ -9,6 +9,8 @@ import subprocess
 import sys
 import time
 
+import install_termination as termination
+
 SERIAL = "emulator-5554"
 READINESS_SECONDS = 60
 PROBE_SECONDS = 5
@@ -279,16 +281,25 @@ def main():
         print(f"::error::Install report path rejected ({type(failure).__name__})", file=sys.stderr)
         return 1
     inputs_valid = False
+    termination_metadata = None
+    failed_install_role = None
     try:
         directory = verified_apks(directory)
         inputs_valid = True
         report["stage"] = "readiness"
         wait_for_readiness(args.adb, step_deadline, report["readiness"])
+        # Numeric metadata is best-effort and must never weaken or replace the gate.
+        try:
+            termination_metadata = termination.start_metadata(args.adb, report["readiness"]["stable_pid"], step_deadline)
+        except Exception:
+            termination_metadata = termination.unavailable_metadata(report["readiness"]["stable_pid"], "metadata_unavailable")
         for role in ("target", "test"):
             report["stage"] = role + "_install"
             record = install(args.adb, directory / f"{role}.apk", role, step_deadline)
             report["installs"].append(record)
             if not record["passed"]:
+                if record["status"] != "deadline":
+                    failed_install_role = role
                 raise InstallError(role + "_install_failed")
         report.update(status="passed", stage="complete")
     except (InstallError, OSError) as failure:
@@ -300,6 +311,18 @@ def main():
             report["snapshot"].update(role="emulator", stage="post_success" if report["status"] == "passed" else "post_failure")
             if report["status"] == "passed" and not report["snapshot"]["ready"]:
                 report.update(status="blocked", stage="post_install_health", error="post_install_health_failed")
+        if failed_install_role is not None:
+            # Only a real attempted install failure can read the tightly filtered logs.
+            # Collection/report trouble must preserve the original installation failure.
+            try:
+                diagnostic = termination.collect_failure(args.adb, termination_metadata, failed_install_role, step_deadline)
+            except Exception:
+                diagnostic = termination.base_report(failed_install_role, None)
+                diagnostic["reason"] = "io_error"
+            try:
+                termination.write_report(report_path.with_name("install-termination.json"), diagnostic)
+            except Exception:
+                pass
         report["elapsed_ms"] = milliseconds(time.monotonic() - started)
     try:
         report_path.write_text(encode_report(report), encoding="utf-8")

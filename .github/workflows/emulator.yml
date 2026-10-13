@@ -3,8 +3,16 @@ name: Offline Android emulator smoke tests
 on:
   workflow_dispatch:
     inputs:
+      api_scope:
+        description: 'Run the approved API37 diagnostic alone or the API37/API35 regression pair'
+        required: true
+        type: choice
+        default: '35-and-37'
+        options:
+          - '35-and-37'
+          - '37'
       allow_kvm_access:
-        description: 'Explicit owner approval for this dispatch only: temporary UID 1001 KVM access on the two API 37/35 runners'
+        description: 'Explicit owner approval for this dispatch only: temporary UID 1001 KVM access on the selected temporary runners'
         required: true
         type: boolean
         default: false
@@ -21,20 +29,15 @@ jobs:
     if: >-
       ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/4.0-dev' &&
           github.event.repository.default_branch == '4.0-dev' &&
-          inputs.allow_kvm_access == true && github.run_attempt == 1 }}
+          inputs.allow_kvm_access == true && github.run_attempt == 1 &&
+          (inputs.api_scope == '37' || inputs.api_scope == '35-and-37') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
-        include:
-          - api: 37
-            image: system-images;android-37.0;google_apis;x86_64
-            image_dir: android-37.0/google_apis/x86_64
-          - api: 35
-            image: system-images;android-35;google_apis;x86_64
-            image_dir: android-35/google_apis/x86_64
+        include: ${{ fromJSON(inputs.api_scope == '37' && '[{"api":37,"image":"system-images;android-37.0;google_apis;x86_64","image_dir":"android-37.0/google_apis/x86_64"}]' || '[{"api":37,"image":"system-images;android-37.0;google_apis;x86_64","image_dir":"android-37.0/google_apis/x86_64"},{"api":35,"image":"system-images;android-35;google_apis;x86_64","image_dir":"android-35/google_apis/x86_64"}]') }}
     env:
       CI: 'true'
       ANDROID_SERIAL: emulator-5554
@@ -121,6 +124,7 @@ jobs:
           python3 scripts/test_offline_smoke.py
           python3 scripts/test_emulator_storage.py
           python3 scripts/test_offline_install.py
+          python3 scripts/test_install_termination.py
           python3 scripts/test_kvm_access.py
           python3 app/src/test/compatibility/check_image_picker.py
           ./gradlew --no-daemon --console=plain --stacktrace -PofflineSmoke=true :app:assembleSmoke :app:assembleSmokeAndroidTest
@@ -274,7 +278,7 @@ jobs:
           root.mkdir(parents=True, exist_ok=True)
           allowed = {'sdk-versions.json', 'acceleration.txt', 'device.txt', 'apk-verification.json',
                      'summary.json', 'instrumentation.txt', 'kvm-diagnostics.json', 'kvm-restoration.json', 'device-profile.txt',
-                     'storage-host.json', 'storage-guest.json', 'install-diagnostics.json'}
+                     'storage-host.json', 'storage-guest.json', 'install-diagnostics.json', 'install-termination.json'}
           allowed.update(f'{role}-{kind}.txt' for role in ('target', 'test')
                          for kind in ('permissions', 'badging', 'manifest'))
           for file in root.iterdir():
