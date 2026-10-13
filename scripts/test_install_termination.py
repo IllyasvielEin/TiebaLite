@@ -30,7 +30,8 @@ def epoch(ns):
 
 def line(message, pid=PID, tid=PID, priority="E", tag="AndroidRuntime", timestamp=None):
     us = (START_NS // 1000 + 1_000_000) if timestamp is None else timestamp
-    return f"{us // 1_000_000}.{us % 1_000_000:06d} {pid:5d} {tid:5d} {priority} {tag:<8}: {message}\n".encode()
+    # logprint.cpp: %19lld seconds + .%06ld usec, %5d PID/TID, %-8.*s tag.
+    return f"{us // 1_000_000:19d}.{us % 1_000_000:06d} {pid:5d} {tid:5d} {priority} {tag:<8}: {message}\n".encode()
 
 
 def fatal(**kwargs):
@@ -183,8 +184,106 @@ class ParserChecks(unittest.TestCase):
         self.assertEqual("invalid_header", reason)
         self.assertEqual(diagnostic.unknown_evidence(), evidence)
         reason, _, _, evidence = self.parse(line("ordinary\u2028" + forged, pid=9000))
+        self.assertIsNone(reason)
+        self.assertFalse(evidence["java_fatal_seen"])
+        self.assertIsNone(evidence["java_exception"])
+
+    def test_source_widths_multiline_java_tabs_and_empty_message_segments(self):
+        # Source-derived output layout, never asserted to be the discarded API37 bytes.
+        raw = (b"--------- beginning of crash\n" + fatal() + line("java.lang.NullPointerException: " + SECRET) +
+               line("\tat private.secret.Frame.call(Frame.java:23)") + line("") +
+               line("Caused by: java.lang.OutOfMemoryError: " + SECRET) +
+               line("\tSuppressed: java.lang.SecurityException: " + SECRET) +
+               line("\tat private.secret.Other.call(Other.java:42)") +
+               b"--------- beginning of main\n" + zygote())
+        details = {}
+        # Reproduce only the former code-level defect, not the unknown runtime capture.
+        self.assertTrue(any(not char.isprintable() and char not in "\r\n" for char in raw.decode()))
+        self.assertFalse(any(not char.isprintable() and char not in "\r\n" for char in raw.replace(b"\t", b" ").decode()))
+        reason, parsed, ignored, evidence = diagnostic.parse_records(raw, PID, ZYGOTES, START_NS, END_NS, details)
+        self.assertIsNone(reason)
+        self.assertEqual(8, parsed)
+        self.assertEqual(7, ignored)
+        self.assertEqual("NullPointerException", evidence["java_exception"])
+        self.assertEqual(9, evidence["zygote_signal"])
+        self.assertEqual(10, details["line_count"])
+        self.assertEqual(2, details["banner_lines"])
+        self.assertEqual(3, details["message_tab_lines"])
+        self.assertIsNone(details["rejection_phase"])
+        self.assertNotIn(SECRET, json.dumps(details) + json.dumps(evidence))
+
+    def test_valid_utf8_nonprintable_body_is_not_split_stripped_or_exported(self):
+        # convertPrintable copies valid UTF-8, including these Python-nonprintable values.
+        body = "\u0085\u00a0\u200b\u2028\u2029\ufeff" + SECRET
+        self.assertFalse(all(character.isprintable() for character in body))
+        raw = fatal() + line("java.lang.IllegalStateException: " + body) + line(body + fatal().decode().rstrip("\n"))
+        details = {}
+        reason, parsed, _, evidence = diagnostic.parse_records(raw, PID, ZYGOTES, START_NS, END_NS, details)
+        self.assertIsNone(reason)
+        self.assertEqual(3, parsed)
+        self.assertEqual(3, details["line_count"])
+        self.assertEqual("IllegalStateException", evidence["java_exception"])
+        self.assertFalse(evidence["ambiguous"])
+        self.assertNotIn(SECRET, json.dumps(details) + json.dumps(evidence))
+
+    def test_tabs_unicode_header_whitespace_unknown_banners_and_unprefixed_blank_lines_reject(self):
+        valid = fatal()
+        cases = (valid.replace(b".123456 ", b".123456\t", 1), valid.replace(b" 1742 ", b"\t1742 ", 1),
+                 valid.replace(b"E AndroidRuntime", b"E\tAndroidRuntime", 1),
+                 valid.replace(b".123456 ", ".123456\u00a0".encode(), 1),
+                 b"--------- beginning of radio\n", b"--------- arbitrary separator\n", b"\n", b"\t\n")
+        for raw in cases:
+            with self.subTest(raw_bytes=len(raw)):
+                details = {}
+                reason, _, _, evidence = diagnostic.parse_records(raw, PID, ZYGOTES, START_NS, END_NS, details)
+                self.assertEqual("invalid_header", reason)
+                self.assertEqual("header", details["rejection_phase"])
+                self.assertEqual(diagnostic.unknown_evidence(), evidence)
+
+    def test_crlf_counts_and_late_rejection_clear_earlier_positive_facts(self):
+        raw = (fatal() + line("java.lang.OutOfMemoryError: " + SECRET)).replace(b"\n", b"\r\n")
+        details = {}
+        reason, parsed, _, evidence = diagnostic.parse_records(raw, PID, ZYGOTES, START_NS, END_NS, details)
+        self.assertIsNone(reason)
+        self.assertEqual(2, parsed)
+        self.assertEqual(2, details["crlf_lines"])
+        self.assertEqual("OutOfMemoryError", evidence["java_exception"])
+        raw += line("bad\rbody " + SECRET)
+        reason, parsed, _, evidence = diagnostic.parse_records(raw, PID, ZYGOTES, START_NS, END_NS, details)
         self.assertEqual("invalid_header", reason)
+        self.assertEqual(2, parsed)
+        self.assertEqual(3, details["first_rejected_line"])
+        self.assertEqual("control", details["rejection_phase"])
+        self.assertEqual("epoch_header", details["first_rejected_shape"])
         self.assertEqual(diagnostic.unknown_evidence(), evidence)
+
+    def test_fixed_structural_rejection_phase_and_shape_vocabulary(self):
+        good = fatal()
+        cases = ((good + line("bad " + SECRET).replace(b"bad", b"\xff", 1), "decode", "epoch_header", 2),
+                 (b"--------- beginning of main", "terminator", "known_banner", 1),
+                 (good.replace(b": ", b": \x00", 1), "control", "epoch_header", 1),
+                 (line("x" * 4097), "line_length", "epoch_header", 1),
+                 (good.replace(b".123456", b".1234567", 1), "header", "epoch_prefix", 1),
+                 (good.replace(b"1742", b"2147483648", 1), "pid", "epoch_header", 1),
+                 (b"10-13 02:00:00.123 1742 1742 E AndroidRuntime: " + SECRET.encode() + b"\n", "header", "calendar_prefix", 1),
+                 (b"unprefixed " + SECRET.encode() + b"\n", "header", "other", 1))
+        phases, shapes = set(), set()
+        for raw, phase, shape, rejected in cases:
+            with self.subTest(phase=phase, shape=shape):
+                details = {}
+                reason, _, _, evidence = diagnostic.parse_records(raw, PID, ZYGOTES, START_NS, END_NS, details)
+                self.assertIsNotNone(reason)
+                self.assertEqual(phase, details["rejection_phase"])
+                self.assertEqual(shape, details["first_rejected_shape"])
+                self.assertEqual(rejected, details["first_rejected_line"])
+                self.assertEqual(len(raw.split(b"\n")[rejected - 1]), details["first_rejected_line_bytes"])
+                self.assertEqual(max(map(len, raw.split(b"\n"))), details["max_line_bytes"])
+                self.assertEqual(diagnostic.unknown_evidence(), evidence)
+                self.assertNotIn(SECRET, json.dumps(details))
+                phases.add(phase)
+                shapes.add(shape)
+        self.assertEqual(diagnostic.REJECTION_PHASES, phases)
+        self.assertEqual(diagnostic.REJECTED_SHAPES, shapes)
 
     def test_non_utf8_controls_malformed_overlong_headers_and_partial_records_are_unknown(self):
         good = fatal()
@@ -324,6 +423,56 @@ class CollectionChecks(unittest.TestCase):
             with self.assertRaises(ValueError):
                 diagnostic.write_report(path, report)
             self.assertEqual(SECRET, (root / "private").read_text())
+
+    def test_schema_two_structural_diagnostics_reject_extra_keys_bad_enums_and_ranges(self):
+        for field, value in (("line_count", -1), ("max_line_bytes", 65537), ("banner_lines", True),
+                             ("message_tab_lines", 1), ("crlf_lines", 1), ("first_rejected_line", 0),
+                             ("first_rejected_line_bytes", -1), ("rejection_phase", SECRET),
+                             ("first_rejected_shape", SECRET), ("raw_prefix", SECRET)):
+            with self.subTest(field=field):
+                report = diagnostic.base_report("target", metadata())
+                report["format_diagnostics"][field] = value
+                with self.assertRaises(ValueError):
+                    diagnostic.validate_report(report)
+        report = diagnostic.base_report("target", metadata())
+        self.assertEqual(2, report["schema"])
+        self.assertEqual(diagnostic.empty_format_diagnostics(), report["format_diagnostics"])
+        diagnostic.validate_report(report)
+        report["schema"] = 1
+        with self.assertRaises(ValueError):
+            diagnostic.validate_report(report)
+
+    def test_structural_details_survive_invalid_format_without_retaining_log_content(self):
+        raw = fatal() + line("java.lang.OutOfMemoryError: " + SECRET) + line("bad " + SECRET).replace(b"bad", b"bad\x00", 1)
+        with mock.patch.object(diagnostic, "read_capped", side_effect=[capture(epoch(END_NS)), capture(raw)]):
+            report = diagnostic.collect_failure("/official/adb", metadata(), "target", time.monotonic() + 270)
+        self.assertEqual("invalid_format", report["collection_status"])
+        self.assertEqual(diagnostic.unknown_evidence(), report["evidence"])
+        self.assertEqual(2, report["parsed_records"])
+        self.assertEqual(3, report["format_diagnostics"]["line_count"])
+        self.assertEqual(3, report["format_diagnostics"]["first_rejected_line"])
+        self.assertEqual("control", report["format_diagnostics"]["rejection_phase"])
+        self.assertEqual("epoch_header", report["format_diagnostics"]["first_rejected_shape"])
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "install-termination.json"
+            diagnostic.write_report(path, report)
+            self.assertNotIn(SECRET, path.read_text())
+            self.assertLessEqual(path.stat().st_size, 4096)
+
+    def test_serialized_maximum_fixed_report_remains_within_four_kib(self):
+        report = diagnostic.base_report("test", {"system_server_pid": diagnostic.MAX_PID,
+                                                "zygote_pids": [diagnostic.MAX_PID - 1, diagnostic.MAX_PID - 2]})
+        report.update(collection_status="invalid_format", reason="invalid_header", window_duration_ms=210000,
+                      exit_code=diagnostic.MAX_PID, elapsed_ms=300000, stdout_bytes_seen=65536, stderr_bytes_seen=1024,
+                      parsed_records=65536, ignored_records=65536)
+        report["format_diagnostics"] = {**{name: 65536 for name in diagnostic.FORMAT_COUNTS},
+                                        "first_rejected_line": 65536, "first_rejected_line_bytes": 65536,
+                                        "rejection_phase": "line_length", "first_rejected_shape": "calendar_prefix"}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "install-termination.json"
+            diagnostic.write_report(path, report)
+            self.assertLessEqual(path.stat().st_size, 4096)
+            self.assertEqual(report, json.loads(path.read_text()))
 
     def test_report_sibling_hardlink_directory_fifo_and_parent_symlink_are_rejected(self):
         report = diagnostic.base_report("target", metadata())

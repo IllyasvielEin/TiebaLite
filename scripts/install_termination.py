@@ -24,6 +24,10 @@ HEADER = re.compile(r" {0,16}([1-9][0-9]{0,9})\.([0-9]{6}) {1,16}([1-9][0-9]{0,9
 LIBC_SIGNAL = re.compile(r"Fatal signal ([1-9][0-9]?) \(SIG[A-Z0-9_+ -]{1,24}\), code -?[0-9]{1,10} \([^()\r\n]{1,128}\)(?:, (?:fault addr (?:0x[0-9A-Fa-f]{1,16}|\(nil\))|syscall [0-9]{1,10}))? in tid ([1-9][0-9]{0,9}) \([^()\r\n]{1,64}\)(?:, pid ([1-9][0-9]{0,9}) \([^()\r\n]{1,64}\))?")
 EVIDENCE_FIELDS = ("zygote_termination_seen", "zygote_exit_status", "zygote_signal",
                    "java_fatal_seen", "java_exception", "libc_signal")
+BANNER = re.compile(r"--------- (?:beginning of|switch to) (?:main|system|crash)")
+REJECTION_PHASES = {"decode", "terminator", "control", "line_length", "header", "pid"}
+REJECTED_SHAPES = {"known_banner", "epoch_header", "epoch_prefix", "calendar_prefix", "other"}
+FORMAT_COUNTS = ("line_count", "max_line_bytes", "banner_lines", "message_tab_lines", "crlf_lines")
 
 
 def ms(seconds):
@@ -32,6 +36,25 @@ def ms(seconds):
 
 def unknown_evidence():
     return {**{name: None for name in EVIDENCE_FIELDS}, "ambiguous": False}
+
+
+def empty_format_diagnostics():
+    return {**{name: 0 for name in FORMAT_COUNTS}, "first_rejected_line": None,
+            "first_rejected_line_bytes": None, "rejection_phase": None, "first_rejected_shape": None}
+
+
+def structural_shape(raw):
+    """Classify syntax only; this coarse enum is never used to accept evidence."""
+    text = raw.decode("utf-8", errors="replace")
+    if BANNER.fullmatch(text):
+        return "known_banner"
+    if HEADER.fullmatch(text):
+        return "epoch_header"
+    if re.match(r" {0,16}[1-9][0-9]{0,9}\.[0-9]{1,12}(?: |$)", text):
+        return "epoch_prefix"
+    if re.match(r" {0,16}(?:[0-9]{4}-)?[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}", text):
+        return "calendar_prefix"
+    return "other"
 
 
 def read_capped(arguments, seconds, deadline, stdout_limit=MAX_STDOUT_BYTES):
@@ -174,25 +197,43 @@ def base_report(role, metadata):
     zygotes = metadata.get("zygote_pids", [])
     if not isinstance(zygotes, list) or not 1 <= len(zygotes) <= 2 or not all(positive_pid(pid) for pid in zygotes) or len(set(zygotes)) != len(zygotes):
         zygotes = []
-    return {"schema": 1, "role": role, "window_scope": "install_sequence",
+    return {"schema": 2, "role": role, "window_scope": "install_sequence",
             "system_server_pid": pid if positive_pid(pid) else None, "zygote_pids": zygotes,
             "window_duration_ms": None, "collection_status": "unavailable", "reason": "metadata_unavailable",
             "exit_code": None, "elapsed_ms": 0, "stdout_bytes_seen": 0, "stderr_bytes_seen": 0,
-            "parsed_records": 0, "ignored_records": 0, "evidence": unknown_evidence()}
+            "parsed_records": 0, "ignored_records": 0, "format_diagnostics": empty_format_diagnostics(),
+            "evidence": unknown_evidence()}
 
 
-def parse_records(raw, pid, zygotes, start_ns, end_ns):
+def parse_records(raw, pid, zygotes, start_ns, end_ns, format_diagnostics=None):
     """Source-derived exact headers/markers, never emit free-form log or throwable text."""
     evidence = {**unknown_evidence(), "zygote_termination_seen": False, "java_fatal_seen": False}
     parsed, ignored = 0, 0
+    diagnostics = {} if format_diagnostics is None else format_diagnostics
+    diagnostics.clear()
+    diagnostics.update(empty_format_diagnostics())
+    fragments = raw.split(b"\n") if raw else []
+    terminated = raw.endswith(b"\n")
+    if terminated:
+        fragments.pop()
+    terminated_fragments = fragments if terminated else fragments[:-1]
+    diagnostics.update(line_count=len(fragments), max_line_bytes=max(map(len, fragments), default=0),
+                       crlf_lines=sum(fragment.endswith(b"\r") for fragment in terminated_fragments))
+
+    def reject(reason, phase, index):
+        fragment = fragments[index - 1]
+        # Strip a CR only when it is the CR of a real CRLF record terminator.
+        logical = fragment[:-1] if fragment.endswith(b"\r") and (terminated or index < len(fragments)) else fragment
+        diagnostics.update(first_rejected_line=index, first_rejected_line_bytes=len(fragment),
+                           rejection_phase=phase, first_rejected_shape=structural_shape(logical))
+        return reason, parsed, ignored, unknown_evidence()
+
     try:
         text = raw.decode("utf-8", errors="strict")
-    except UnicodeError:
-        return "invalid_utf8", parsed, ignored, unknown_evidence()
-    if raw and not raw.endswith(b"\n"):
-        return "truncated_record", parsed, ignored, unknown_evidence()
-    if "\r" in text.replace("\r\n", "") or any(not char.isprintable() and char not in "\r\n" for char in text):
-        return "invalid_header", parsed, ignored, unknown_evidence()
+    except UnicodeDecodeError as failure:
+        return reject("invalid_utf8", "decode", raw[:failure.start].count(b"\n") + 1)
+    if raw and not terminated:
+        return reject("truncated_record", "terminator", len(fragments))
     pending_fatal = {}
     conflicted = set()
     observed_fields = set()
@@ -211,17 +252,31 @@ def parse_records(raw, pid, zygotes, start_ns, end_ns):
             evidence[name] = value
             fact_identities[name] = identity
 
-    for line in text.replace("\r\n", "\n").split("\n")[:-1]:
-        if re.fullmatch(r"--------- (?:beginning of|switch to) (?:main|system|crash)", line):
+    # Explicit LF splitting preserves Unicode line separators inside the body; every
+    # real message segment must still carry logprint's own strict sender header.
+    for index, line in enumerate(text.split("\n")[:-1], 1):
+        if line.endswith("\r"):
+            line = line[:-1]
+        if len(line.encode("utf-8")) > MAX_LINE_BYTES:
+            return reject("invalid_header", "line_length", index)
+        if BANNER.fullmatch(line):
             ignored += 1
+            diagnostics["banner_lines"] += 1
             continue
-        match = HEADER.fullmatch(line) if len(line.encode("utf-8")) <= MAX_LINE_BYTES else None
+        match = HEADER.fullmatch(line)
         if match is None:
-            return "invalid_header", parsed, ignored, unknown_evidence()
+            phase = "control" if any(ord(char) < 32 and char != "\t" or ord(char) == 127 for char in line) else "header"
+            return reject("invalid_header", phase, index)
         seconds, micros, sender, tid = map(int, match.groups()[:4])
         priority, tag, message = match.groups()[4:]
+        # Official convertPrintable preserves body TAB and every valid UTF-8 sequence.
+        # Headers remain ASCII-space-only. Other raw C0/DEL bytes cannot pass in bodies.
+        if any(ord(char) < 32 and char != "\t" or ord(char) == 127 for char in message):
+            return reject("invalid_header", "control", index)
         if not positive_pid(sender) or not positive_pid(tid):
-            return "invalid_header", parsed, ignored, unknown_evidence()
+            return reject("invalid_header", "pid", index)
+        if "\t" in message:
+            diagnostics["message_tab_lines"] += 1
         timestamp = seconds * 1_000_000 + micros
         parsed += 1
         if not start_ns // 1000 <= timestamp <= end_ns // 1000:
@@ -302,7 +357,8 @@ def _collect_failure(adb, metadata, role, deadline):
     collection, raw = read_capped(arguments, LOG_SECONDS, deadline)
     report.update(collection)
     if report["collection_status"] == "complete":
-        reason, parsed, ignored, evidence = parse_records(raw, report["system_server_pid"], report["zygote_pids"], start_ns, end_ns)
+        reason, parsed, ignored, evidence = parse_records(raw, report["system_server_pid"], report["zygote_pids"], start_ns, end_ns,
+                                                         report["format_diagnostics"])
         report.update(parsed_records=parsed, ignored_records=ignored, evidence=evidence)
         if reason is not None:
             report.update(collection_status="invalid_format", reason=reason)
@@ -320,12 +376,12 @@ def validate_report(report):
     """Reject extra/free-form fields rather than attempting to scrub private text."""
     expected = {"schema", "role", "window_scope", "system_server_pid", "zygote_pids", "window_duration_ms",
                 "collection_status", "reason", "exit_code", "elapsed_ms", "stdout_bytes_seen", "stderr_bytes_seen",
-                "parsed_records", "ignored_records", "evidence"}
+                "parsed_records", "ignored_records", "format_diagnostics", "evidence"}
     statuses = {"unavailable", "complete", "timeout", "byte_limit", "command_error", "invalid_format", "invalid_window"}
     reasons = {None, "metadata_unavailable", "invalid_metadata", "invalid_window", "no_budget", "command_failed",
                "stderr_present", "invalid_utf8", "invalid_header", "truncated_record", "output_limit", "timeout", "io_error"}
     evidence = report.get("evidence", {})
-    if (set(report) != expected or report["schema"] != 1 or report["role"] not in {"target", "test"} or
+    if (set(report) != expected or type(report["schema"]) is not int or report["schema"] != 2 or report["role"] not in {"target", "test"} or
             report["window_scope"] != "install_sequence" or report["collection_status"] not in statuses or
             report["reason"] not in reasons or set(evidence) != set(EVIDENCE_FIELDS) | {"ambiguous"}):
         raise ValueError("invalid_metadata")
@@ -343,6 +399,26 @@ def validate_report(report):
               "stderr_bytes_seen": (0, MAX_STDERR_BYTES, False), "parsed_records": (0, MAX_STDOUT_BYTES, False),
               "ignored_records": (0, MAX_STDOUT_BYTES, False)}
     if any(not integer(report[name], *bounds) for name, bounds in limits.items()):
+        raise ValueError("invalid_metadata")
+    diagnostics = report["format_diagnostics"]
+    if (set(diagnostics) != set(empty_format_diagnostics()) or
+            any(not integer(diagnostics[name], 0, MAX_STDOUT_BYTES) for name in FORMAT_COUNTS) or
+            not integer(diagnostics["first_rejected_line"], 1, MAX_STDOUT_BYTES, True) or
+            not integer(diagnostics["first_rejected_line_bytes"], 0, MAX_STDOUT_BYTES, True) or
+            diagnostics["rejection_phase"] not in {None, *REJECTION_PHASES} or
+            diagnostics["first_rejected_shape"] not in {None, *REJECTED_SHAPES}):
+        raise ValueError("invalid_metadata")
+    if (any(diagnostics[name] > diagnostics["line_count"] for name in ("banner_lines", "message_tab_lines", "crlf_lines")) or
+            (diagnostics["first_rejected_line"] is not None and diagnostics["first_rejected_line"] > diagnostics["line_count"]) or
+            (diagnostics["first_rejected_line_bytes"] is not None and diagnostics["first_rejected_line_bytes"] > diagnostics["max_line_bytes"])):
+        raise ValueError("invalid_metadata")
+    rejection = (diagnostics["first_rejected_line"], diagnostics["first_rejected_line_bytes"],
+                 diagnostics["rejection_phase"], diagnostics["first_rejected_shape"])
+    if any(value is None for value in rejection) and not all(value is None for value in rejection):
+        raise ValueError("invalid_metadata")
+    if ((report["collection_status"] == "complete" and diagnostics["rejection_phase"] is not None) or
+            (report["collection_status"] == "invalid_format" and diagnostics["rejection_phase"] is None) or
+            (report["collection_status"] not in {"complete", "invalid_format"} and diagnostics != empty_format_diagnostics())):
         raise ValueError("invalid_metadata")
     if (any(evidence[name] is not None and not isinstance(evidence[name], bool) for name in ("zygote_termination_seen", "java_fatal_seen")) or
             not isinstance(evidence["ambiguous"], bool) or

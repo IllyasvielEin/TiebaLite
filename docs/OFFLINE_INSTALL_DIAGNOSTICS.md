@@ -137,6 +137,41 @@ and [Toybox numeric date formats](https://raw.githubusercontent.com/landley/toyb
 The invoked logcat comes from the system image, not host platform-tools. Actual API37/API35
 format validation still requires an authorized run.
 
+### Official body-format compatibility and structural reporting
+
+Run `38334145181` reached log collection: exit zero, 2677 stdout bytes, no stderr. Its
+schema-1 summary reported `invalid_header` with zero parsed/ignored records. Raw bytes
+were intentionally discarded, so the rejected content and exact cause are unknown. The
+earlier tests covered an intended synthetic format, not actual image output.
+
+Official `convertPrintable` leaves literal TAB unchanged and copies valid UTF-8 sequences
+without Python's Unicode printability check. The earlier whole-capture `isprintable()`
+gate incorrectly rejected both, even inside a correctly prefixed message. The source-derived
+fixture now uses width-19 epoch seconds, six fractional digits, width-5 PID/TID, padded tags,
+real per-segment headers, empty message segments and literal-tab Java stack lines. It
+reproduces that code defect, not the discarded runner bytes. A format-compatible fix still
+requires a later authorized runtime check; it does not establish the install failure's cause.
+
+The parser now validates each unchanged strict header before its body. Only within that
+body it permits TAB, printable ASCII and valid non-ASCII UTF-8, matching the official
+formatter. Raw ASCII C0/DEL, stray CR, malformed UTF-8, header tabs/Unicode whitespace,
+unprefixed continuations and unknown/blank separators still fail closed. LF remains the
+only record split, with optional terminal CR for CRLF; Unicode line separators inside a
+message never create records. PID, timestamp, tag, child-process and throwable correlation
+boundaries are unchanged. No additional log query, broader filters, raw output or replay
+is added.
+
+Schema **2** adds only a fixed `format_diagnostics` object: total LF-delimited line count,
+maximum raw line bytes excluding LF, CRLF count, verified banner/message-TAB line counts,
+and nullable first-rejected line number/byte count. Verified counts stop at a rejection;
+total counts cover the capped capture. Coarse rejection-phase enums are
+`decode/terminator/control/line_length/header/pid`; shape enums are
+`known_banner/epoch_header/epoch_prefix/calendar_prefix/other`. Shapes classify syntax and
+never grant evidence acceptance. They include no raw prefix, token, codepoint, hash, name
+or log text. Unattempted parsing has zero/null diagnostics. Any later rejected record
+clears even earlier positive evidence. The complete maximum fixed report remains within
+4 KiB, and collector/file-safety/deadline/original-failure guarantees remain unchanged.
+
 `python3 scripts/test_offline_install.py` and `python3 scripts/test_install_termination.py`
 exercise these guards with mocked adb calls, a synthetic clock and real local Python
 pipe cap/timeout/reap tests, including invalid byte streams. They do not prove actual
