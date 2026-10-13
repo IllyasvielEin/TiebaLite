@@ -36,7 +36,7 @@ class FakeClock:
 
 
 class InstallChecks(unittest.TestCase):
-    def invoke(self, folder, sequence=None, run_function=None, sha=True, apks=None, report_path=None):
+    def invoke(self, folder, sequence=None, run_function=None, sha=True, apks=None, report_path=None, transport=None):
         root = Path(folder)
         directory = root / "apks"
         directory.mkdir(exist_ok=True)
@@ -50,6 +50,8 @@ class InstallChecks(unittest.TestCase):
         argv = ["install_offline_apks.py", "--apks", str(apks or directory),
                 "--adb", "/official-sdk/platform-tools/adb", "--serial", helper.SERIAL,
                 "--report", str(output)]
+        if transport is not None:
+            argv.extend(["--transport", transport])
         clock = FakeClock()
         calls = []
         pending = iter(sequence or [])
@@ -87,6 +89,7 @@ class InstallChecks(unittest.TestCase):
                 result(b"Performing Streamed Install\nSuccess\n"), result(b"Success\r\n")] + ready()
             code, report, calls, clock = self.invoke(folder, sequence)
             self.assertEqual(0, code)
+            self.assertEqual("default", report["requested_transport"])
             self.assertEqual("passed", report["status"])
             self.assertEqual("post_success", report["snapshot"]["stage"])
             self.assertEqual(3, report["readiness"]["samples"])
@@ -107,6 +110,169 @@ class InstallChecks(unittest.TestCase):
                 else:
                     self.assertEqual(["install", "-t"], arguments[3:5])
                     self.assertEqual(90, kwargs["timeout"])
+
+    def test_explicit_default_preserves_baseline_install_arguments(self):
+        with tempfile.TemporaryDirectory() as folder:
+            code, report, calls, _ = self.invoke(folder, ready() + ready() +
+                                                [result(b"Success\n"), result(b"Success\n")] + ready(),
+                                                transport="default")
+            expected = [["/official-sdk/platform-tools/adb", "-s", helper.SERIAL, "install", "-t",
+                         str(Path(folder) / "apks" / f"{role}.apk")] for role in ("target", "test")]
+            self.assertEqual(expected, self.install_calls(calls))
+        self.assertEqual(0, code)
+        self.assertEqual("default", report["requested_transport"])
+
+    def test_no_streaming_installs_verified_target_then_test_once_with_exact_arguments(self):
+        with tempfile.TemporaryDirectory() as folder:
+            code, report, calls, clock = self.invoke(folder, ready() + ready() +
+                                                    [result(b"Performing Push Install\nSuccess\n"), result(b"Success\n")] + ready(),
+                                                    transport="no-streaming")
+            expected = [["/official-sdk/platform-tools/adb", "-s", helper.SERIAL, "install", "--no-streaming", "-t",
+                         str(Path(folder) / "apks" / f"{role}.apk")] for role in ("target", "test")]
+            self.assertEqual(expected, self.install_calls(calls))
+            self.assertEqual({"target.apk", "test.apk", "SHA256SUMS"}, {path.name for path in (Path(folder) / "apks").iterdir()})
+            self.assertEqual(b"synthetic target", (Path(folder) / "apks/target.apk").read_bytes())
+            self.assertEqual(b"synthetic test", (Path(folder) / "apks/test.apk").read_bytes())
+        self.assertEqual(0, code)
+        self.assertEqual("passed", report["status"])
+        self.assertEqual("no-streaming", report["requested_transport"])
+        self.assertEqual("post_success", report["snapshot"]["stage"])
+        self.assertEqual(2, clock.now)
+        for arguments, kwargs in calls:
+            self.assertEqual(["-s", helper.SERIAL], arguments[1:3])
+            if arguments[3] == "install":
+                self.assertEqual(90, kwargs["timeout"])
+            else:
+                self.assertIn(tuple(arguments[4:]), [command for _, command in helper.PROBES])
+                self.assertLessEqual(kwargs["timeout"], 5)
+
+    def test_no_streaming_target_failures_never_fallback_retry_or_install_test(self):
+        failures = (result(b"Failure\n", 23, BROKEN_PIPE), result(b"", 0),
+                    result(b" Success\n", 0), result(b"Success\n", 1), result(b"Success\nSuccess\n", 0),
+                    subprocess.TimeoutExpired("not retained", 90, output=b"Success\n", stderr=BROKEN_PIPE))
+        for failure in failures:
+            with self.subTest(failure=type(failure).__name__), tempfile.TemporaryDirectory() as folder:
+                code, report, calls, _ = self.invoke(folder, ready() + ready() + [failure] + ready(package=b""),
+                                                     transport="no-streaming")
+            self.assertEqual(1, code)
+            self.assertEqual("no-streaming", report["requested_transport"])
+            self.assertEqual("target_install", report["stage"])
+            self.assertEqual("target_install_failed", report["error"])
+            self.assertFalse(report["snapshot"]["ready"])
+            installs = self.install_calls(calls)
+            self.assertEqual(1, len(installs))
+            self.assertEqual(["install", "--no-streaming", "-t"], installs[0][3:6])
+            self.assertEqual("target.apk", Path(installs[0][-1]).name)
+            record = report["installs"][0]
+            self.assertFalse(record["passed"])
+            self.assertEqual(90_000, record["timeout_ms"])
+            if isinstance(failure, subprocess.TimeoutExpired):
+                self.assertEqual("timeout", record["status"])
+                self.assertEqual(90_000, record["elapsed_ms"])
+            else:
+                self.assertEqual(failure.returncode, record["exit_code"])
+
+    def test_no_streaming_test_failure_retains_original_exit_without_replay(self):
+        with tempfile.TemporaryDirectory() as folder:
+            code, report, calls, _ = self.invoke(folder, ready() + ready() +
+                                                [result(b"Success\n"), result(b"Failure\n", 23, BROKEN_PIPE)] + ready(package=b""),
+                                                transport="no-streaming")
+        self.assertEqual(1, code)
+        self.assertEqual("no-streaming", report["requested_transport"])
+        self.assertEqual("test_install", report["stage"])
+        self.assertEqual("test_install_failed", report["error"])
+        self.assertEqual(23, report["installs"][1]["exit_code"])
+        self.assertIn("Broken pipe (32)", report["installs"][1]["stderr_preview"])
+        self.assertEqual([True, False], [record["passed"] for record in report["installs"]])
+        self.assertFalse(report["snapshot"]["ready"])
+        self.assertEqual(["target.apk", "test.apk"], [Path(call[-1]).name for call in self.install_calls(calls)])
+        self.assertTrue(all(call[3:6] == ["install", "--no-streaming", "-t"] for call in self.install_calls(calls)))
+
+    def test_no_streaming_both_successes_still_require_post_install_health(self):
+        timeout = subprocess.TimeoutExpired("not retained", 5, output=b"", stderr=b"")
+        for snapshot in (ready(package=b""), [timeout, timeout, timeout]):
+            with self.subTest(snapshot=type(snapshot[0]).__name__), tempfile.TemporaryDirectory() as folder:
+                code, report, calls, _ = self.invoke(folder, ready() + ready() +
+                                                     [result(b"Success\n"), result(b"Success\n")] + snapshot,
+                                                     transport="no-streaming")
+            self.assertEqual(1, code)
+            self.assertEqual("no-streaming", report["requested_transport"])
+            self.assertEqual("post_install_health", report["stage"])
+            self.assertEqual("post_install_health_failed", report["error"])
+            self.assertEqual([True, True], [record["passed"] for record in report["installs"]])
+            self.assertEqual(2, len(self.install_calls(calls)))
+
+    def test_no_streaming_diagnostic_errors_do_not_replace_original_failure(self):
+        with tempfile.TemporaryDirectory() as folder, \
+                mock.patch.object(helper.termination, "collect_failure", side_effect=RuntimeError("not retained")) as collector, \
+                mock.patch.object(helper.termination, "write_report", side_effect=OSError("not retained")) as writer:
+            code, report, calls, _ = self.invoke(folder, ready() + ready() + [result(b"Failure\n", 23, BROKEN_PIPE)] + ready(),
+                                                transport="no-streaming")
+            collector.assert_called_once_with(Path("/official-sdk/platform-tools/adb"),
+                                              helper.termination.unavailable_metadata(432), "target", 270)
+            writer.assert_called_once()
+        self.assertEqual(1, code)
+        self.assertEqual("target_install_failed", report["error"])
+        self.assertEqual(23, report["installs"][0]["exit_code"])
+        self.assertEqual(1, len(self.install_calls(calls)))
+        self.assertEqual("post_failure", report["snapshot"]["stage"])
+        self.assertNotIn("not retained", json.dumps(report))
+
+    def test_requested_transport_remains_recorded_on_readiness_or_input_failure(self):
+        for stage in ("readiness", "inputs"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as folder:
+                if stage == "inputs":
+                    directory = Path(folder) / "apks"
+                    directory.mkdir()
+                    (directory / "unexpected.apk").write_bytes(b"untrusted")
+                def run(arguments, kwargs, clock):
+                    return dict(boot_completed=result(b"0\n"), system_server=result(b"432\n"),
+                                package_path=result(PACKAGE_PATH))[self.probe_name(arguments)]
+                code, report, calls, _ = self.invoke(folder, run_function=run, transport="no-streaming")
+            self.assertEqual(1, code)
+            self.assertEqual(stage, report["stage"])
+            self.assertEqual("no-streaming", report["requested_transport"])
+            self.assertEqual([], self.install_calls(calls))
+
+    def test_both_transport_choices_clip_install_to_unchanged_global_deadline(self):
+        self.assertEqual(90, helper.INSTALL_SECONDS)
+        self.assertEqual(270, helper.STEP_SECONDS)
+        for transport in helper.TRANSPORTS:
+            with self.subTest(transport=transport):
+                clock = FakeClock()
+                clock.now = 269
+                def run(arguments, **kwargs):
+                    self.assertEqual(1, kwargs["timeout"])
+                    clock.now += kwargs["timeout"]
+                    raise subprocess.TimeoutExpired("not retained", kwargs["timeout"], output=b"Success\n")
+                with mock.patch.object(helper.subprocess, "run", side_effect=run) as commands, \
+                        mock.patch.object(helper.time, "monotonic", side_effect=clock.monotonic):
+                    record = helper.install("/official-sdk/platform-tools/adb", Path("/verified/target.apk"), "target", 270, transport)
+                    self.assertEqual("timeout", record["status"])
+                    self.assertEqual(1000, record["timeout_ms"])
+                    self.assertFalse(record["passed"])
+                    expired = helper.install("/official-sdk/platform-tools/adb", Path("/verified/test.apk"), "test", 270, transport)
+                    self.assertEqual("deadline", expired["status"])
+                    self.assertEqual(0, expired["timeout_ms"])
+                    self.assertEqual(1, commands.call_count)
+                    self.assertEqual(["install", "-t"] if transport == "default" else ["install", "--no-streaming", "-t"],
+                                     commands.call_args.args[0][3:-1])
+                self.assertEqual(30, 300 - clock.now)
+
+    def test_transport_cli_rejects_unknown_values_before_any_adb_or_report(self):
+        for transport in ("streaming", "auto", "--streaming", "no-streaming;id", "NO-STREAMING"):
+            argv = ["installer", "--apks", "unused", "--adb", "unused", "--report", "unused",
+                    "--transport=" + transport]
+            with self.subTest(transport=transport), mock.patch.object(sys, "argv", argv), \
+                    contextlib.redirect_stderr(io.StringIO()), mock.patch.object(helper.subprocess, "run") as run, \
+                    mock.patch.object(helper, "prepare_report_path") as report, self.assertRaises(SystemExit) as error:
+                helper.main()
+            self.assertEqual(2, error.exception.code)
+            run.assert_not_called()
+            report.assert_not_called()
+        with mock.patch.object(helper.subprocess, "run") as run, self.assertRaisesRegex(helper.InstallError, "^invalid_requested_transport$"):
+            helper.install("unused", Path("unused"), "target", 270, "unknown")
+        run.assert_not_called()
 
     def test_readiness_deadline_is_monotonic_and_no_install_occurs(self):
         def run(arguments, kwargs, clock):
@@ -316,7 +482,7 @@ class InstallChecks(unittest.TestCase):
             self.assertEqual("deadline", expired["status"])
             self.assertEqual(0, expired["timeout_ms"])
             self.assertEqual(1, commands.call_count)
-        encoded = helper.encode_report({"schema": 1, "status": "blocked", "stage": "target_install",
+        encoded = helper.encode_report({"schema": 1, "requested_transport": "default", "status": "blocked", "stage": "target_install",
                                         "elapsed_ms": 270_000, "installs": [record],
                                         "snapshot": {"probes": {"boot_completed": expired}}})
         with tempfile.TemporaryDirectory() as folder:
@@ -329,23 +495,26 @@ class InstallChecks(unittest.TestCase):
     def test_invalid_utf8_oversized_control_bytes_preserve_counts_in_four_kib_report(self):
         large = b"\xff\x00\x1b\x7f" * 100_000
         output = b"Failure\n" + large
-        with tempfile.TemporaryDirectory() as folder:
-            code, report, _, _ = self.invoke(folder, ready(stderr=large) + ready(stderr=large) +
-                                             [result(b"Success\n", stderr=large), result(output, 19, large)] + ready(stderr=large))
-        self.assertEqual(1, code)
-        self.assertEqual(19, report["installs"][1]["exit_code"])
-        self.assertEqual(400_008, report["installs"][1]["stdout_bytes"])
-        self.assertEqual(400_008, report["installs"][1]["stdout_characters"])
-        self.assertEqual(2, report["readiness"]["probe_counts"]["system_server"]["ready"])
-        self.assertEqual(432, report["readiness"]["stable_pid"])
-        for record in helper.records(report):
-            for stream in ("stdout", "stderr"):
-                preview = record[stream + "_preview"]
-                self.assertLessEqual(len(preview), 128)
-                self.assertTrue(all(" " <= character <= "~" for character in preview))
-                self.assertEqual(record[stream + "_characters"] - len(preview), record[stream + "_omitted_characters"])
-                if stream == "stderr":
-                    self.assertEqual(400_000, record["stderr_bytes"])
+        for transport in helper.TRANSPORTS:
+            with self.subTest(transport=transport), tempfile.TemporaryDirectory() as folder:
+                code, report, _, _ = self.invoke(folder, ready(stderr=large) + ready(stderr=large) +
+                                                 [result(b"Success\n", stderr=large), result(output, 19, large)] + ready(stderr=large),
+                                                 transport=transport)
+            self.assertEqual(1, code)
+            self.assertEqual(transport, report["requested_transport"])
+            self.assertEqual(19, report["installs"][1]["exit_code"])
+            self.assertEqual(400_008, report["installs"][1]["stdout_bytes"])
+            self.assertEqual(400_008, report["installs"][1]["stdout_characters"])
+            self.assertEqual(2, report["readiness"]["probe_counts"]["system_server"]["ready"])
+            self.assertEqual(432, report["readiness"]["stable_pid"])
+            for record in helper.records(report):
+                for stream in ("stdout", "stderr"):
+                    preview = record[stream + "_preview"]
+                    self.assertLessEqual(len(preview), 128)
+                    self.assertTrue(all(" " <= character <= "~" for character in preview))
+                    self.assertEqual(record[stream + "_characters"] - len(preview), record[stream + "_omitted_characters"])
+                    if stream == "stderr":
+                        self.assertEqual(400_000, record["stderr_bytes"])
 
     def test_actual_apk_triplet_and_optional_hash_file_remain_unchanged(self):
         for sha in (True, False):

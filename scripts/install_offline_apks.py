@@ -12,6 +12,7 @@ import time
 import install_termination as termination
 
 SERIAL = "emulator-5554"
+TRANSPORTS = ("default", "no-streaming")
 READINESS_SECONDS = 60
 PROBE_SECONDS = 5
 SAMPLE_INTERVAL_SECONDS = 2
@@ -222,11 +223,19 @@ def wait_for_readiness(adb, step_deadline, evidence):
     raise InstallError("readiness_deadline")
 
 
-def install(adb, apk, role, step_deadline):
-    record, stdout = command(adb, ["install", "-t", str(apk)], INSTALL_SECONDS, step_deadline)
+def install(adb, apk, role, step_deadline, transport="default"):
+    if transport not in TRANSPORTS:
+        raise InstallError("invalid_requested_transport")
+    # The default choice preserves the existing adb path. The alternate
+    # choice is explicit and applies once per role, with no replay or fallback.
+    arguments = ["install"]
+    if transport == "no-streaming":
+        arguments.append("--no-streaming")
+    arguments.extend(["-t", str(apk)])
+    record, stdout = command(adb, arguments, INSTALL_SECONDS, step_deadline)
     record.update(role=role, stage="install")
     # A zero exit code alone is insufficient. Match the whole unmodified line, never a
-    # substring or a whitespace-stripped diagnostic. Keep default adb install transport.
+    # substring or a whitespace-stripped diagnostic.
     record["success_lines"] = sum(line == b"Success" for line in stdout.splitlines())
     record["passed"] = (record["status"] == "exit" and record["exit_code"] == 0 and
                         record["success_lines"] == 1 and len(stdout) <= MAX_PARSE_BYTES)
@@ -266,11 +275,12 @@ def main():
     parser.add_argument("--apks", type=Path, required=True)
     parser.add_argument("--adb", type=Path, required=True)
     parser.add_argument("--serial", choices=(SERIAL,), default=SERIAL)
+    parser.add_argument("--transport", choices=TRANSPORTS, default="default")
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
     started = time.monotonic()
     step_deadline = started + STEP_SECONDS
-    report = {"schema": 1, "serial": SERIAL, "status": "blocked", "stage": "inputs",
+    report = {"schema": 1, "serial": SERIAL, "requested_transport": args.transport, "status": "blocked", "stage": "inputs",
               "readiness": {}, "installs": []}
     # Prepare the safe report destination even when input validation fails, so the
     # caller gets a bounded failure report without ever probing/installing unsafe input.
@@ -295,7 +305,7 @@ def main():
             termination_metadata = termination.unavailable_metadata(report["readiness"]["stable_pid"], "metadata_unavailable")
         for role in ("target", "test"):
             report["stage"] = role + "_install"
-            record = install(args.adb, directory / f"{role}.apk", role, step_deadline)
+            record = install(args.adb, directory / f"{role}.apk", role, step_deadline, args.transport)
             report["installs"].append(record)
             if not record["passed"]:
                 if record["status"] != "deadline":

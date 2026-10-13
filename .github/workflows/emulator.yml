@@ -11,6 +11,14 @@ on:
         options:
           - '35-and-37'
           - '37'
+      install_transport:
+        description: 'Single-attempt transport; no-streaming is an API37-only comparison, never a retry'
+        required: true
+        type: choice
+        default: 'default'
+        options:
+          - 'default'
+          - 'no-streaming'
       allow_kvm_access:
         description: 'Explicit owner approval for this dispatch only: temporary UID 1001 KVM access on the selected temporary runners'
         required: true
@@ -30,7 +38,9 @@ jobs:
       ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/4.0-dev' &&
           github.event.repository.default_branch == '4.0-dev' &&
           inputs.allow_kvm_access == true && github.run_attempt == 1 &&
-          (inputs.api_scope == '37' || inputs.api_scope == '35-and-37') }}
+          (inputs.api_scope == '37' || inputs.api_scope == '35-and-37') &&
+          (inputs.install_transport == 'default' ||
+           (inputs.install_transport == 'no-streaming' && inputs.api_scope == '37')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     strategy:
@@ -45,6 +55,7 @@ jobs:
       SMOKE_IMAGE_DIR: ${{ matrix.image_dir }}
       SMOKE_API: ${{ matrix.api }}
       ALLOW_KVM_ACCESS: ${{ inputs.allow_kvm_access }}
+      INSTALL_TRANSPORT: ${{ inputs.install_transport }}
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
       - name: Check out trusted source
@@ -211,6 +222,7 @@ jobs:
           adb="$ANDROID_HOME/platform-tools/adb"
           python3 scripts/install_offline_apks.py \
             --apks "$RUNNER_TEMP/offline-apks" --adb "$adb" --serial "$ANDROID_SERIAL" \
+            --transport "$INSTALL_TRANSPORT" \
             --report out/smoke-reports/install-diagnostics.json
 
       - name: Run all eleven bounded offline smoke cases

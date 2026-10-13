@@ -9,8 +9,8 @@ In the [official cmd source](https://android.googlesource.com/platform/framework
 this diagnostic follows a negative `IBinder::shellCommand` result after obtaining a service
 handle. That identifies a failed call, not its underlying cause. The
 [official adb install source](https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/client/adb_install.cpp)
-chooses the default transport from device features. The helper keeps `adb install -t`
-unchanged; it adds no transport override or replay.
+chooses the default transport from device features. The helper's default keeps
+`adb install -t` unchanged; a separately selected `no-streaming` mode is described below.
 
 ## Caller contract
 
@@ -31,6 +31,26 @@ signature isolation itself, read/write APK contents, or replace the caller's has
 The report must have the fixed filename `install-diagnostics.json` outside this directory.
 Only the fixed disposable serial is accepted.
 
+### Explicit install transport comparison
+
+`--transport` accepts only `default` (the default) or `no-streaming`. The former preserves
+the exact baseline `adb -s emulator-5554 install -t VERIFIED_APK` arguments. It requests
+ADB's default mode; it does not attest that ADB selected streaming. The latter emits
+exactly `adb -s emulator-5554 install --no-streaming -t VERIFIED_APK` for each attempted
+role. The [official ADB mode parser and selection](https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/client/adb_install.cpp#356)
+map this explicit option to push installation without a fallback mode; the legacy
+installer pushes the APK before invoking package installation.
+
+The primary report records the fixed `requested_transport=default/no-streaming` enum,
+including input/readiness failures. The helper never chooses a different transport from
+probe or install results, falls back between these choices, or replays an install. Target
+still runs once, followed by test once only on success. All readiness/health gates,
+90-second role timeouts, 270-second shared command deadline, failure-only termination
+collection and report limits are unchanged. This opt-in code supports a future separately
+authorized comparison; mocked host tests do not establish either mode's API37 runtime
+outcome or the cause of the observed service/process loss. Workflow input/wiring and
+runtime authorization remain the caller's responsibility.
+
 ## Readiness and one attempt per role
 
 A monotonic **60-second** readiness deadline contains three fixed read-only probes, each
@@ -48,7 +68,7 @@ observation, not a guarantee that a later service call cannot fail.
 The helper installs the target once, then the test APK once only if the target succeeded.
 Each install has a **90-second** timeout and requires exit zero plus exactly one whole
 `Success` stdout line. Failure or timeout blocks further installation and returns nonzero.
-There is no retry, reboot, transport change, SDK installation or guest/host permission change.
+There is no retry, reboot, automatic transport change, SDK installation or guest/host permission change.
 
 After both successes or an adb-stage failure, one **15-second** read-only snapshot repeats
 the same three probes. Snapshot uncertainty is recorded and never replaces the original
@@ -64,7 +84,7 @@ for cleanup even when this helper fails.
 
 ## Small retained evidence
 
-The JSON report is capped at **4 KiB**. It records role/stage, elapsed milliseconds,
+The JSON report is capped at **4 KiB**. It records the requested transport, role/stage, elapsed milliseconds,
 command exit/timeout/error status, configured command timeout, readiness sample/PID-change
 counts, per-probe status/parse counts and latest observations, both install results and the
 final snapshot. Repeated readiness samples use fixed-size aggregate counts rather than an
@@ -105,8 +125,8 @@ in memory and immediately discards stderr content, counting at most **1 KiB**. I
 **5-second** budget includes reserved kill/reap time. It has no temporary raw file,
 console echo, generic command previews or unbounded `communicate()`. These added commands
 share the 270-second deadline; ordinary command budgets total 266 seconds, preserving the
-five-minute step's report-writing margin. No SDK, transport, permissions or retry changes
-are involved.
+five-minute step's report-writing margin. Collection does not alter the selected transport,
+SDK, permissions or retry policy.
 
 Only anchored, bounded formatted headers within the guest window are considered. Zygote
 templates must come from a captured zygote PID and reference the captured system-server
@@ -134,8 +154,9 @@ Source-derived fixtures and format boundaries use the official
 [RuntimeInit fatal marker](https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/core/java/com/android/internal/os/RuntimeInit.java),
 [debuggerd native signal summary](https://android.googlesource.com/platform/system/core/+/refs/heads/main/debuggerd/handler/debuggerd_handler.cpp)
 and [Toybox numeric date formats](https://raw.githubusercontent.com/landley/toybox/master/toys/posix/date.c).
-The invoked logcat comes from the system image, not host platform-tools. Actual API37/API35
-format validation still requires an authorized run.
+The invoked logcat comes from the system image, not host platform-tools. Host fixtures
+alone cannot establish image-specific format support; the observed API37 capture below
+provides one bounded runtime check, not a guarantee for other captures or images.
 
 ### Official body-format compatibility and structural reporting
 
@@ -149,8 +170,11 @@ without Python's Unicode printability check. The earlier whole-capture `isprinta
 gate incorrectly rejected both, even inside a correctly prefixed message. The source-derived
 fixture now uses width-19 epoch seconds, six fractional digits, width-5 PID/TID, padded tags,
 real per-segment headers, empty message segments and literal-tab Java stack lines. It
-reproduces that code defect, not the discarded runner bytes. A format-compatible fix still
-requires a later authorized runtime check; it does not establish the install failure's cause.
+reproduces that code defect, not the discarded runner bytes. Later run `38337086608` reported
+complete collection for 747 stdout bytes, six parsed records and two validated banners,
+without a format rejection or matching termination signature. This confirms acceptance of
+that bounded API37 capture; it neither establishes a healthy/no-crash result nor explains
+the observed installation failure or service/process loss.
 
 The parser now validates each unchanged strict header before its body. Only within that
 body it permits TAB, printable ASCII and valid non-ASCII UTF-8, matching the official

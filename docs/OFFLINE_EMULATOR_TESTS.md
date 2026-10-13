@@ -6,7 +6,9 @@ The manual **Offline Android emulator smoke tests** workflow can run only from t
 `4.0-dev` default branch. It uses standard `ubuntu-24.04` runners, read-only repository
 permission, SHA-pinned actions and a fixed matrix with `max-parallel: 1`.
 `api_scope` defaults to `35-and-37`; selecting `37` runs only the primary diagnostic.
-No arbitrary API, image or shell input is accepted. Every selected job
+The fixed `install_transport` choice defaults to `default` (ADB chooses its normal mode); `no-streaming` is
+accepted only with `api_scope=37` for a one-variable, single-attempt comparison.
+It never retries a failed default-mode installation. No arbitrary API, image or shell input is accepted. Every selected job
 requires the default-false `allow_kvm_access` dispatch input to be explicitly enabled
 under the owner's approval for that dispatch, and `github.run_attempt == 1`:
 
