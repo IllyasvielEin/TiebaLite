@@ -2,6 +2,8 @@ package com.huanchengfly.tieba.post.api.retrofit.interceptors
 
 import okhttp3.Interceptor
 import okhttp3.Response
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import com.huanchengfly.tieba.post.security.AvatarUrlPolicy
 import com.huanchengfly.tieba.post.security.PublicDownloadPolicyException
 import com.huanchengfly.tieba.post.security.PublicDownloadPolicyException.Reason
 
@@ -21,6 +23,9 @@ class AnonymousTransportInterceptor(private val upgradeHttp: Boolean = false) : 
             if (!upgradeHttp || url.port != 80) throw PublicDownloadPolicyException(Reason.INSECURE_TRANSPORT)
             url = url.newBuilder().scheme("https").port(443).build()
         }
+        // Only the application interceptor migrates known legacy portrait routes.
+        // The network interceptor must still reject HTTP redirect downgrades.
+        if (upgradeHttp) url = AvatarUrlPolicy.normalizeLegacy(url.toString()).toHttpUrl()
         val sanitized = request.newBuilder().url(url)
         for (header in request.headers.names()) {
             if (header.lowercase() in SECRET_HEADERS) sanitized.removeHeader(header)

@@ -20,7 +20,7 @@ public final class AvatarDiagnosticStore {
     public static final int MAX_EVENTS = 40;
     public enum Source { AVATAR, AVATAR_SNAPSHOT, NETWORK }
     public enum InputKind { EMPTY, PORTRAIT_ID, HTTP_URL, HTTPS_URL, LOCAL, OTHER }
-    public enum Host { AVATAR_CDN, OTHER, NONE }
+    public enum Host { AVATAR_CDN, HIMG_CDN, OTHER, NONE }
     public enum Stage {
         START, DNS, CONNECT, TLS, TLS_OK, RESPONSE, COMPLETE,
         SUCCESS_NETWORK, SUCCESS_DOWNLOAD_CACHE, SUCCESS_MEMORY_OR_RESULT_CACHE,
@@ -83,7 +83,7 @@ public final class AvatarDiagnosticStore {
             out.append("enabled=").append(enabled).append(" events=").append(events.size())
                     .append(" dropped=").append(dropped).append('\n');
             out.append("AVATAR = observed display transitions; AVATAR_SNAPSHOT = current state, possibly loaded before enabling.\n");
-            out.append("NETWORK = tb.himg portrait-route stages; host is the original request host, not a proven failure location after redirects.\n");
+            out.append("NETWORK = allowlisted legacy/HIMG portrait-route stages; host is the original request host, not a proven contacted/failure host after route migration or redirects.\n");
             out.append("Entries are independent, not correlated by timing. Missing NETWORK entries do not prove a cache hit.\n");
             for (Event event : events) {
                 out.append(event.source).append(" input=").append(event.inputKind)
@@ -197,11 +197,13 @@ public final class AvatarDiagnosticStore {
 
     public static Host classifyHost(String host) {
         if (host == null || host.isEmpty()) return Host.NONE;
-        return "tb.himg.baidu.com".equalsIgnoreCase(host) ? Host.AVATAR_CDN : Host.OTHER;
+        if ("tb.himg.baidu.com".equalsIgnoreCase(host)) return Host.AVATAR_CDN;
+        return "himg.bdimg.com".equalsIgnoreCase(host) ? Host.HIMG_CDN : Host.OTHER;
     }
 
     private static String hostLabel(Host host) {
         if (host == Host.AVATAR_CDN) return "tb.himg.baidu.com";
+        if (host == Host.HIMG_CDN) return "himg.bdimg.com";
         return host == Host.NONE ? "none" : "other";
     }
 

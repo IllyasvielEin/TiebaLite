@@ -17,8 +17,10 @@ button reads a fresh snapshot rather than a previously rendered report.
 - `AVATAR_SNAPSHOT`: current display state; it may have loaded before recording
   was enabled. Fast memory-cache results may also appear as snapshots.
 - `NETWORK`: stages of existing image-client requests for the known
-  `tb.himg.baidu.com/sys/portrait/item/` and `sys/portraith/item/` routes.
-- Network `host` is the original request host. A redirect's scheme and host
+  `tb.himg.baidu.com` and `himg.bdimg.com` normal `/sys/portrait/item/` and
+  large `/sys/portraith/item/` routes.
+- Network `host` is the original request host, before legacy route migration. It
+  does not prove the actual contacted host. A redirect's scheme and host
   bucket can be shown, but a later failure is not proof of failure at that
   original host. The network listener does not cover arbitrary avatar hosts.
 - Entries are independent. They are not joined by timing or identity. Missing

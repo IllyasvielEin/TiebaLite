@@ -41,6 +41,8 @@ public final class AvatarDiagnosticHarness {
         for (String host : new String[]{"tb.himg.baidu.com.evil.example", "secret.example", "tb.himg.baidu.com@evil.example", "tb.himg.baidu.com\nsecret", "192.0.2.1"}) {
             check(AvatarDiagnosticStore.classifyHost(host) == Host.OTHER, "host bucket");
         }
+        check(AvatarDiagnosticStore.classifyHost("himg.bdimg.com") == Host.HIMG_CDN, "new CDN bucket");
+        check(AvatarDiagnosticStore.classifyHost("himg.bdimg.com.evil.example") == Host.OTHER, "new CDN lookalike");
         check(AvatarDiagnosticStore.hostFromInput("https://tb.himg.baidu.com@secret.example/a") == Host.OTHER, "URL userinfo deception");
         check(AvatarDiagnosticStore.hostFromInput("https://synthetic-secret@tb.himg.baidu.com/private") == Host.AVATAR_CDN, "no userinfo retained");
     }

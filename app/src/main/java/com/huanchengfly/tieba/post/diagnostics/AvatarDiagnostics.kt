@@ -35,7 +35,7 @@ object AvatarDiagnostics {
     /** Observe only the existing known avatar route. Other image requests remain unobserved. */
     val networkListenerFactory = EventListener.Factory { call ->
         val url = call.request().url
-        val knownPortraitRoute = url.host == "tb.himg.baidu.com" &&
+        val knownPortraitRoute = (url.host == "tb.himg.baidu.com" || url.host == "himg.bdimg.com") &&
             (url.encodedPath.startsWith("/sys/portrait/item/") ||
                 url.encodedPath.startsWith("/sys/portraith/item/"))
         val lease = if (knownPortraitRoute) {
@@ -43,7 +43,7 @@ object AvatarDiagnostics {
                 Source.NETWORK,
                 if (url.isHttps) AvatarDiagnosticStore.InputKind.HTTPS_URL
                 else AvatarDiagnosticStore.InputKind.HTTP_URL,
-                Host.AVATAR_CDN,
+                AvatarDiagnosticStore.classifyHost(url.host),
             )
         } else null
         if (lease == null) EventListener.NONE else object : EventListener() {

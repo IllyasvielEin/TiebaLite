@@ -41,4 +41,38 @@ class AnonymousTransportInterceptorTest {
         }
         assertFalse(reached)
     }
+    @Test fun legacyAvatarMigrationPreservesEncodedDataAndAnonymousBoundaries() {
+        var received: Request? = null
+        val client = OkHttpClient.Builder().addInterceptor(AnonymousTransportInterceptor(true))
+            .addInterceptor {
+                received = it.request()
+                Response.Builder().request(it.request()).protocol(Protocol.HTTP_1_1)
+                    .code(200).message("synthetic").body("".toResponseBody()).build()
+            }.build()
+        for (path in listOf("portrait", "portraith")) {
+            client.newCall(Request.Builder()
+                .url("http://tb.himg.baidu.com/sys/$path/item/a%2Fb+z?t=123&x=&x=2")
+                .header("Cookie", "BDUSS=synthetic").header("Authorization", "synthetic").build()).execute().close()
+            assertEquals("https://himg.bdimg.com/sys/$path/item/a%2Fb+z?t=123&x=&x=2", received!!.url.toString())
+            assertNull(received!!.header("Cookie"))
+            assertNull(received!!.header("Authorization"))
+        }
+        for (url in listOf("http://tb.himg.baidu.com/sys/portrait/item/a?BDUSS=synthetic",
+            "https://user:pass@tb.himg.baidu.com/sys/portrait/item/a")) {
+            received = null
+            assertThrows(IOException::class.java) { client.newCall(Request.Builder().url(url).build()).execute() }
+            assertNull(received)
+        }
+    }
+
+    @Test fun legacyHttpAvatarStillRejectedByNonUpgradingNetworkGuard() {
+        var reached = false
+        val client = OkHttpClient.Builder().addInterceptor(AnonymousTransportInterceptor(false))
+            .addInterceptor { reached = true; error("must not reach network") }.build()
+        assertThrows(IOException::class.java) {
+            client.newCall(Request.Builder().url("http://tb.himg.baidu.com/sys/portrait/item/a").build()).execute()
+        }
+        assertFalse(reached)
+    }
+
 }

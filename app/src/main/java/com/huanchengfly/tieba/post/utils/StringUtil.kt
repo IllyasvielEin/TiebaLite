@@ -147,24 +147,12 @@ object StringUtil {
 
     @JvmStatic
     @Stable
-    fun getAvatarUrl(portrait: String?): String {
-        if (portrait.isNullOrEmpty()) {
-            return ""
-        }
-        return if (portrait.startsWith("http://") || portrait.startsWith("https://")) {
-            portrait
-        } else "http://tb.himg.baidu.com/sys/portrait/item/$portrait"
-    }
+    fun getAvatarUrl(portrait: String?): String =
+        com.huanchengfly.tieba.post.security.AvatarUrlPolicy.small(portrait)
 
     @JvmStatic
-    fun getBigAvatarUrl(portrait: String?): String {
-        if (portrait.isNullOrEmpty()) {
-            return ""
-        }
-        return if (portrait.startsWith("http://") || portrait.startsWith("https://")) {
-            portrait
-        } else "http://tb.himg.baidu.com/sys/portraith/item/$portrait"
-    }
+    fun getBigAvatarUrl(portrait: String?): String =
+        com.huanchengfly.tieba.post.security.AvatarUrlPolicy.large(portrait)
 
     fun String.getShortNumString(): String {
         val long = toLongOrNull() ?: return ""

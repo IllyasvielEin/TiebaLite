@@ -11,6 +11,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 
@@ -27,7 +28,9 @@ class AvatarDiagnosticsTest {
             store.setEnabled(true)
             for (url in listOf("https://secret.example/sys/portrait/item/synthetic-secret",
                 "https://tb.himg.baidu.com/not-an-avatar/synthetic-secret",
-                "https://tb.himg.baidu.com.evil.example/sys/portrait/item/synthetic-secret")) {
+                "https://tb.himg.baidu.com.evil.example/sys/portrait/item/synthetic-secret",
+                "https://himg.bdimg.com.evil.example/sys/portrait/item/synthetic-secret",
+                "https://himg.bdimg.com/not-an-avatar/synthetic-secret")) {
                 val call = client.newCall(Request.Builder().url(url).build())
                 assertSame(EventListener.NONE, AvatarDiagnostics.networkListenerFactory.create(call))
             }
@@ -73,4 +76,21 @@ class AvatarDiagnosticsTest {
             store.setEnabled(false)
         }
     }
+    @Test fun newAvatarHostIsObservedAndReportedAsDistinctFixedBucket() {
+        val store = AvatarDiagnostics.store
+        store.setEnabled(false)
+        try {
+            store.setEnabled(true)
+            for (path in listOf("portrait", "portraith")) {
+                val call = OkHttpClient().newCall(Request.Builder()
+                    .url("https://himg.bdimg.com/sys/$path/item/synthetic-secret").build())
+                val listener = AvatarDiagnostics.networkListenerFactory.create(call)
+                listener.callStart(call)
+                assertEquals(AvatarDiagnosticStore.Host.HIMG_CDN, store.snapshot().events.last().host)
+            }
+            assertTrue(store.snapshot().report().contains("himg.bdimg.com"))
+            assertFalse(store.snapshot().report().contains("synthetic-secret"))
+        } finally { store.setEnabled(false) }
+    }
+
 }

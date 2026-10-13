@@ -5,7 +5,7 @@
     <string name="avatar_diagnostics_instructions">开启记录后，返回帖子并刷新页面，再回到此页复制报告。无需读取系统日志，也不会额外请求任何图片。</string>
     <string name="avatar_diagnostics_enable">记录本次诊断</string>
     <string name="avatar_diagnostics_privacy">默认关闭；最多保留最近 40 条事件，仅存于内存。关闭、清空或重启应用会清除记录。不记录账号、头像标识、完整网址、路径、查询参数、请求头或原始异常。</string>
-    <string name="avatar_diagnostics_coverage">AVATAR 是头像显示状态变化；AVATAR_SNAPSHOT 是当前状态，可能在开启前已加载。NETWORK 仅观察 tb.himg.baidu.com 的头像路径，host 是原始请求主机，重定向后的失败地点不能据此确定。记录彼此独立，不按时间猜测对应关系。缺少 NETWORK 记录不代表命中缓存；SUCCESS_* 会标明实际数据来源。</string>
+    <string name="avatar_diagnostics_coverage">AVATAR 是头像显示状态变化；AVATAR_SNAPSHOT 是当前状态，可能在开启前已加载。NETWORK 仅观察 tb.himg.baidu.com 和 himg.bdimg.com 的头像路径，host 是原始请求主机；地址迁移或重定向后，不能据此确定实际连接或失败的主机。记录彼此独立，不按时间猜测对应关系。缺少 NETWORK 记录不代表命中缓存；SUCCESS_* 会标明实际数据来源。</string>
     <string name="avatar_diagnostics_clear">清空记录</string>
     <string name="avatar_diagnostics_copy">复制报告</string>
     <string name="avatar_diagnostics_copied">已复制脱敏诊断报告</string>
