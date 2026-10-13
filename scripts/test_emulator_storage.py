@@ -285,7 +285,7 @@ class StorageChecks(unittest.TestCase):
             self.assertIn("BadZipFile", report["error"])
 
     def test_workflow_checks_space_before_kvm_and_before_install(self):
-        source = (ROOT / ".github/workflows/emulator.yml").read_text()
+        source = (ROOT / "docs/archive/emulator.yml.disabled").read_text()
         self.assertIn(f"-partition-size {storage.PARTITION_MIB}", source)
         self.assertLess(source.index("check_emulator_storage.py host"), source.index("kvm_access.py acquire"))
         self.assertLess(source.index("sha256sum -c SHA256SUMS"), source.index("check_emulator_storage.py guest"))

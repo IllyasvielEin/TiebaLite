@@ -1,5 +1,10 @@
 # Offline emulator smoke checks
 
+> Archived on 2026-10-13 at the owner’s request. The workflow is preserved in
+> `docs/archive/emulator.yml.disabled`, outside GitHub Actions discovery. The following
+> describes the historical test setup; cloud emulator execution is no longer exposed.
+> Build, unit-test, lint and optional signing checks remain in `build.yml`.
+
 ## Scope and safety boundary
 
 The manual **Offline Android emulator smoke tests** workflow can run only from the trusted

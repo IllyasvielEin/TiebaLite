@@ -1,5 +1,10 @@
 # Bounded offline APK installation
 
+> Archived on 2026-10-13 at the owner’s request. The workflow is preserved in
+> `docs/archive/emulator.yml.disabled`, outside GitHub Actions discovery. The following
+> describes the historical test setup; cloud emulator execution is no longer exposed.
+> Build, unit-test, lint and optional signing checks remain in `build.yml`.
+
 Run `38275237917` passed measured storage capacity and the packaged APK isolation/hash
 gates, then the first default/streamed target install reported
 `cmd: Failure calling service package: Broken pipe (32)`. No package-service stack was
