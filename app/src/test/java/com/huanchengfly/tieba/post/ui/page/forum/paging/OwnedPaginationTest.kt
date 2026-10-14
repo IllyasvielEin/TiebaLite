@@ -80,7 +80,7 @@ class OwnedPaginationTest {
         }
     }
 
-    @Test fun refreshImmediatelyInvalidatesOldLoadingSuccessAndDelayedSideEffects() = runBlocking {
+    @Test fun refreshImmediatelyInvalidatesOldLoadingSuccessAndDelayedSideEffects() = runBlocking<Unit> {
         val f = Fixture(this, ignoreCancellation = true)
         try {
             f.seed()
@@ -101,7 +101,7 @@ class OwnedPaginationTest {
         } finally { f.close() }
     }
 
-    @Test fun oldFailureThatIgnoresCancellationCannotProduceToastOrFailure() = runBlocking {
+    @Test fun oldFailureThatIgnoresCancellationCannotProduceToastOrFailure() = runBlocking<Unit> {
         val f = Fixture(this, ignoreCancellation = true)
         try {
             f.seed()
@@ -119,7 +119,7 @@ class OwnedPaginationTest {
         } finally { f.close() }
     }
 
-    @Test fun queuedOldFailureHasFinalUiGuardAfterRefreshAcceptance() = runBlocking {
+    @Test fun queuedOldFailureHasFinalUiGuardAfterRefreshAcceptance() = runBlocking<Unit> {
         val f = Fixture(this)
         try {
             f.seed()
@@ -139,7 +139,7 @@ class OwnedPaginationTest {
         } finally { f.close() }
     }
 
-    @Test fun twoOwnersNeverShareQueryCursorGenerationOrJobs() = runBlocking {
+    @Test fun twoOwnersNeverShareQueryCursorGenerationOrJobs() = runBlocking<Unit> {
         val a = Fixture(this, ignoreCancellation = true)
         val b = Fixture(this)
         try {
@@ -168,7 +168,7 @@ class OwnedPaginationTest {
         } finally { a.close(); b.close() }
     }
 
-    @Test fun repeatedLoadMoreDuringFlightIsDroppedInsteadOfQueuedSnapshots() = runBlocking {
+    @Test fun repeatedLoadMoreDuringFlightIsDroppedInsteadOfQueuedSnapshots() = runBlocking<Unit> {
         val f = Fixture(this, ignoreCancellation = true)
         try {
             f.seed()
@@ -196,7 +196,7 @@ class OwnedPaginationTest {
         } finally { f.close() }
     }
 
-    @Test fun filteredTailUsesRawCursorAndEmptyDuplicatePagesContinueUntilNewId() = runBlocking {
+    @Test fun filteredTailUsesRawCursorAndEmptyDuplicatePagesContinueUntilNewId() = runBlocking<Unit> {
         val f = Fixture(this)
         try {
             f.actions.send(PagingAction.Replace("raw"))
@@ -221,7 +221,7 @@ class OwnedPaginationTest {
         } finally { f.close() }
     }
 
-    @Test fun budgetIsThreeTotalRequestsAndOnlyManualContinueCanResetIt() = runBlocking {
+    @Test fun budgetIsThreeTotalRequestsAndOnlyManualContinueCanResetIt() = runBlocking<Unit> {
         val f = Fixture(this)
         try {
             f.actions.send(PagingAction.Replace("empty"))
@@ -244,7 +244,7 @@ class OwnedPaginationTest {
         } finally { f.close() }
     }
 
-    @Test fun delayedAutomaticUiTriggersCannotRestartExhaustedBudget() = runBlocking {
+    @Test fun delayedAutomaticUiTriggersCannotRestartExhaustedBudget() = runBlocking<Unit> {
         val f = Fixture(this)
         try {
             f.actions.send(PagingAction.Replace("empty"))
@@ -263,7 +263,7 @@ class OwnedPaginationTest {
         } finally { f.close() }
     }
 
-    @Test fun repeatedRawCursorAndEmptyRawPageStopSafely() = runBlocking {
+    @Test fun repeatedRawCursorAndEmptyRawPageStopSafely() = runBlocking<Unit> {
         val f = Fixture(this)
         try {
             f.seed(id = 10)
@@ -283,7 +283,7 @@ class OwnedPaginationTest {
         } finally { f.close() }
     }
 
-    @Test fun refreshFailureRetainsDisplayedQueryAndCursor() = runBlocking {
+    @Test fun refreshFailureRetainsDisplayedQueryAndCursor() = runBlocking<Unit> {
         val f = Fixture(this)
         try {
             f.seed("old", 10)
@@ -301,7 +301,7 @@ class OwnedPaginationTest {
         } finally { f.close() }
     }
 
-    @Test fun refreshFailureCannotRestoreAnOldSuccessNeverAppliedToUi() = runBlocking {
+    @Test fun refreshFailureCannotRestoreAnOldSuccessNeverAppliedToUi() = runBlocking<Unit> {
         val f = Fixture(this)
         try {
             f.seed("displayed", 10)
@@ -326,7 +326,7 @@ class OwnedPaginationTest {
         } finally { f.close() }
     }
 
-    @Test fun errorAfterSuccessfulEmptyAppendRetainsProgressButNotFailedPage() = runBlocking {
+    @Test fun errorAfterSuccessfulEmptyAppendRetainsProgressButNotFailedPage() = runBlocking<Unit> {
         val f = Fixture(this)
         try {
             f.seed()
@@ -349,7 +349,7 @@ class OwnedPaginationTest {
         } finally { f.close() }
     }
 
-    @Test fun accountSwitchIncludingAtoBtoAInvalidatesOldResultsAndCursor() = runBlocking {
+    @Test fun accountSwitchIncludingAtoBtoAInvalidatesOldResultsAndCursor() = runBlocking<Unit> {
         val version = AtomicLong(0)
         val f = Fixture(this, ignoreCancellation = true, accountVersion = { version.get() })
         try {
@@ -373,7 +373,7 @@ class OwnedPaginationTest {
         } finally { f.close() }
     }
 
-    @Test fun logoutFailedReloadNeverRestoresPreviousAccountsPrivateListOrCursor() = runBlocking {
+    @Test fun logoutFailedReloadNeverRestoresPreviousAccountsPrivateListOrCursor() = runBlocking<Unit> {
         val version = AtomicLong(0)
         val f = Fixture(this, accountVersion = { version.get() })
         try {
@@ -396,7 +396,7 @@ class OwnedPaginationTest {
         } finally { f.close() }
     }
 
-    @Test fun initialSessionChangedDoesNotCreateDuplicateFirstPageRequest() = runBlocking {
+    @Test fun initialSessionChangedDoesNotCreateDuplicateFirstPageRequest() = runBlocking<Unit> {
         val version = AtomicLong(12)
         val f = Fixture(this, accountVersion = { version.get() })
         try {
@@ -413,7 +413,7 @@ class OwnedPaginationTest {
         } finally { f.close() }
     }
 
-    @Test fun queuedAccountClearSurvivesNewerReplaceUntilActuallyApplied() = runBlocking {
+    @Test fun queuedAccountClearSurvivesNewerReplaceUntilActuallyApplied() = runBlocking<Unit> {
         val version = AtomicLong(0)
         val f = Fixture(this, accountVersion = { version.get() })
         try {

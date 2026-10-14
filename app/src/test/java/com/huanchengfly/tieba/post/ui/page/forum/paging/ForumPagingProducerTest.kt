@@ -73,7 +73,7 @@ class ForumPagingProducerTest {
         assertFalse(delivered)
     }
 
-    @Test fun goodProducerRetainsSelectedClassifyForEveryLoadMoreAndClearsOldLoadingOnRefresh() = runBlocking {
+    @Test fun goodProducerRetainsSelectedClassifyForEveryLoadMoreAndClearsOldLoadingOnRefresh() = runBlocking<Unit> {
         val calls = Channel<Fetch<ForumListQuery, ForumPagingCursor, ForumPageMetadata>>(Channel.UNLIMITED)
         val producer = ForumThreadListPartialChangeProducer(ForumThreadListType.Good, fetchPage = { query, cursor ->
             Fetch<ForumListQuery, ForumPagingCursor, ForumPageMetadata>(query, cursor).also { calls.send(it) }.reply.await()
@@ -110,7 +110,7 @@ class ForumPagingProducerTest {
         } finally { h.close() }
     }
 
-    @Test fun goodProducerNullCategoryRemainsGoodAndIdBatchErrorDoesNotConsumeIds() = runBlocking {
+    @Test fun goodProducerNullCategoryRemainsGoodAndIdBatchErrorDoesNotConsumeIds() = runBlocking<Unit> {
         val calls = Channel<Fetch<ForumListQuery, ForumPagingCursor, ForumPageMetadata>>(Channel.UNLIMITED)
         val producer = ForumThreadListPartialChangeProducer(ForumThreadListType.Good, fetchPage = { query, cursor ->
             Fetch<ForumListQuery, ForumPagingCursor, ForumPageMetadata>(query, cursor).also { calls.send(it) }.reply.await()
@@ -145,7 +145,7 @@ class ForumPagingProducerTest {
         } finally { h.close() }
     }
 
-    @Test fun generalProducerUsesRawCursorAndQueuedFailureCannotReduceOrDispatchAfterNewQuery() = runBlocking {
+    @Test fun generalProducerUsesRawCursorAndQueuedFailureCannotReduceOrDispatchAfterNewQuery() = runBlocking<Unit> {
         val calls = Channel<Fetch<GeneralListQuery, GeneralPagingCursor, Unit>>(Channel.UNLIMITED)
         val producer = GeneralTabListPartialChangeProducer(fetchPage = { query, cursor ->
             Fetch<GeneralListQuery, GeneralPagingCursor, Unit>(query, cursor).also { calls.send(it) }.reply.await()
@@ -183,7 +183,7 @@ class ForumPagingProducerTest {
         } finally { h.close() }
     }
 
-    @Test fun sessionChangedClearsActualReducerListAndFailureDoesNotRestorePrivateData() = runBlocking {
+    @Test fun sessionChangedClearsActualReducerListAndFailureDoesNotRestorePrivateData() = runBlocking<Unit> {
         val version = AtomicLong(0)
         val calls = Channel<Fetch<GeneralListQuery, GeneralPagingCursor, Unit>>(Channel.UNLIMITED)
         val producer = GeneralTabListPartialChangeProducer(
@@ -213,7 +213,7 @@ class ForumPagingProducerTest {
         } finally { h.close() }
     }
 
-    @Test fun newerRefreshCannotSupersedeAccountClearAndLeaveOldPrivateListAfterFailure() = runBlocking {
+    @Test fun newerRefreshCannotSupersedeAccountClearAndLeaveOldPrivateListAfterFailure() = runBlocking<Unit> {
         val version = AtomicLong(0)
         val calls = Channel<Fetch<GeneralListQuery, GeneralPagingCursor, Unit>>(Channel.UNLIMITED)
         val producer = GeneralTabListPartialChangeProducer(
