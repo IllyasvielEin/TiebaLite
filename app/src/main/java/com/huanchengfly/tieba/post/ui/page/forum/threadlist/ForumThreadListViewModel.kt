@@ -4,13 +4,11 @@ import androidx.compose.runtime.Stable
 import com.huanchengfly.tieba.post.api.TiebaApi
 import com.huanchengfly.tieba.post.api.models.AgreeBean
 import com.huanchengfly.tieba.post.api.models.protos.frsPage.Classify
-import com.huanchengfly.tieba.post.api.models.protos.frsPage.FrsPageResponse
 import com.huanchengfly.tieba.post.api.models.protos.updateAgreeStatus
 import com.huanchengfly.tieba.post.api.retrofit.exception.TiebaUnknownException
 import com.huanchengfly.tieba.post.api.retrofit.exception.getErrorCode
 import com.huanchengfly.tieba.post.api.retrofit.exception.getErrorMessage
 import com.huanchengfly.tieba.post.arch.BaseViewModel
-import com.huanchengfly.tieba.post.arch.CommonUiEvent
 import com.huanchengfly.tieba.post.arch.ImmutableHolder
 import com.huanchengfly.tieba.post.arch.PartialChange
 import com.huanchengfly.tieba.post.arch.PartialChangeProducer
@@ -21,6 +19,14 @@ import com.huanchengfly.tieba.post.arch.wrapImmutable
 import com.huanchengfly.tieba.post.repository.FrsPageRepository
 import com.huanchengfly.tieba.post.ui.models.ThreadItemData
 import com.huanchengfly.tieba.post.ui.models.distinctById
+import com.huanchengfly.tieba.post.ui.page.forum.paging.ForumListQuery
+import com.huanchengfly.tieba.post.ui.page.forum.paging.ForumPagingCursor
+import com.huanchengfly.tieba.post.ui.page.forum.paging.OwnedPagination
+import com.huanchengfly.tieba.post.ui.page.forum.paging.OwnedPagingChange
+import com.huanchengfly.tieba.post.ui.page.forum.paging.PagingAction
+import com.huanchengfly.tieba.post.ui.page.forum.paging.PagingChange
+import com.huanchengfly.tieba.post.ui.page.forum.paging.PagingPage
+import com.huanchengfly.tieba.post.utils.AccountUtil
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -29,12 +35,13 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapConcat
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import javax.inject.Inject
-import kotlin.math.min
 
 abstract class ForumThreadListViewModel :
     BaseViewModel<ForumThreadListUiIntent, ForumThreadListPartialChange, ForumThreadListUiState, ForumThreadListUiEvent>() {
@@ -42,9 +49,7 @@ abstract class ForumThreadListViewModel :
 
     override fun dispatchEvent(partialChange: ForumThreadListPartialChange): UiEvent? =
         when (partialChange) {
-            is ForumThreadListPartialChange.FirstLoad.Failure -> CommonUiEvent.Toast(partialChange.error.getErrorMessage())
-            is ForumThreadListPartialChange.Refresh.Failure -> CommonUiEvent.Toast(partialChange.error.getErrorMessage())
-            is ForumThreadListPartialChange.LoadMore.Failure -> CommonUiEvent.Toast(partialChange.error.getErrorMessage())
+            is ForumThreadListPartialChange.Paging -> partialChange.failureEvent()
             is ForumThreadListPartialChange.Agree.Failure -> {
                 ForumThreadListUiEvent.AgreeFail(
                     partialChange.threadId,
@@ -77,115 +82,84 @@ class GoodThreadListViewModel @Inject constructor() : ForumThreadListViewModel()
         ForumThreadListPartialChangeProducer(ForumThreadListType.Good)
 }
 
-private class ForumThreadListPartialChangeProducer(val type: ForumThreadListType) :
+internal data class ForumPageMetadata(
+    val forumRuleTitle: String?,
+    val goodClassifies: List<ImmutableHolder<Classify>>,
+)
+
+internal suspend fun fetchForumListPage(
+    query: ForumListQuery,
+    cursor: ForumPagingCursor,
+): PagingPage<ForumPagingCursor, ThreadItemData, ForumPageMetadata> {
+    return if (cursor.remainingIds.isNotEmpty()) {
+        val response = FrsPageRepository.threadList(
+            query.forumId, query.forumName, cursor.page, query.requestBatchSort,
+            cursor.batch.joinToString(",")
+        ).first()
+        val data = response.data_ ?: throw TiebaUnknownException
+        val next = cursor.consumeBatch()
+        PagingPage(
+            next,
+            data.thread_list.map { ThreadItemData(it.wrapImmutable()) }.filterNot { it.hidden },
+            next.hasMore, cursor.progressedTo(next),
+        )
+    } else {
+        val result = FrsPageRepository.frsPageResult(
+            query.forumName, cursor.page + 1, if (cursor.page == 0) 1 else 2,
+            query.requestSort, query.requestClassify
+        ).first()
+        val data = result.response.data_ ?: throw TiebaUnknownException
+        val page = data.page ?: throw TiebaUnknownException
+        val next = cursor.nextPage(result.rawThreadIds, data.thread_id_list, page.has_more == 1)
+        PagingPage(
+            next,
+            data.thread_list.map { ThreadItemData(it.wrapImmutable()) }.filterNot { it.hidden },
+            next.hasMore, cursor.progressedTo(next),
+            if (cursor.page == 0) ForumPageMetadata(
+                data.forum_rule?.title.takeIf {
+                    !query.isGood && data.forum_rule?.has_forum_rule == 1
+                },
+                (data.forum?.good_classify ?: emptyList()).wrapImmutable(),
+            ) else null,
+        )
+    }
+}
+
+internal class ForumThreadListPartialChangeProducer(
+    private val type: ForumThreadListType,
+    fetchPage: suspend (ForumListQuery, ForumPagingCursor) -> PagingPage<ForumPagingCursor, ThreadItemData, ForumPageMetadata> = ::fetchForumListPage,
+    accountSessionVersion: () -> Long = { AccountUtil.sessionGeneration },
+) :
     PartialChangeProducer<ForumThreadListUiIntent, ForumThreadListPartialChange, ForumThreadListUiState> {
+    private val paging = OwnedPagination<ForumListQuery, ForumPagingCursor, ThreadItemData, ForumPageMetadata>(
+        initialCursor = { ForumPagingCursor() },
+        fetch = fetchPage,
+        itemId = { it.thread.get { id } },
+        accountSession = accountSessionVersion,
+    )
+
+    private fun query(forumId: Long, forumName: String, sortType: Int, goodClassifyId: Int?) =
+        ForumListQuery(forumId, forumName, type == ForumThreadListType.Good, sortType, goodClassifyId)
+
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun toPartialChangeFlow(intentFlow: Flow<ForumThreadListUiIntent>): Flow<ForumThreadListPartialChange> =
         merge(
-            intentFlow.filterIsInstance<ForumThreadListUiIntent.FirstLoad>()
-                .flatMapConcat { it.producePartialChange() },
-            intentFlow.filterIsInstance<ForumThreadListUiIntent.Refresh>()
-                .flatMapConcat { it.producePartialChange() },
-            intentFlow.filterIsInstance<ForumThreadListUiIntent.LoadMore>()
-                .flatMapConcat { it.producePartialChange() },
+            paging.changes(intentFlow.mapNotNull { intent ->
+                when (intent) {
+                    is ForumThreadListUiIntent.FirstLoad -> PagingAction.Replace(
+                        query(intent.forumId, intent.forumName, intent.sortType, intent.goodClassifyId)
+                    )
+                    is ForumThreadListUiIntent.Refresh -> PagingAction.Replace(
+                        query(intent.forumId, intent.forumName, intent.sortType, intent.goodClassifyId)
+                    )
+                    ForumThreadListUiIntent.SessionChanged -> PagingAction.SessionChanged
+                    is ForumThreadListUiIntent.LoadMore -> PagingAction.More(intent.manual)
+                    else -> null
+                }
+            }).map { ForumThreadListPartialChange.Paging(it) },
             intentFlow.filterIsInstance<ForumThreadListUiIntent.Agree>()
                 .flatMapConcat { it.producePartialChange() },
         )
-
-    private fun ForumThreadListUiIntent.FirstLoad.producePartialChange() =
-        FrsPageRepository.frsPage(
-            forumName,
-            1,
-            1,
-            sortType.takeIf { type == ForumThreadListType.Latest } ?: -1,
-            goodClassifyId.takeIf { type == ForumThreadListType.Good }
-        )
-            .map<FrsPageResponse, ForumThreadListPartialChange.FirstLoad> { response ->
-                if (response.data_?.page == null) throw TiebaUnknownException
-                val threadList =
-                    response.data_.thread_list.map { ThreadItemData(it.wrapImmutable()) }
-                ForumThreadListPartialChange.FirstLoad.Success(
-                    response.data_.forum_rule?.title.takeIf {
-                        type == ForumThreadListType.Latest && response.data_.forum_rule?.has_forum_rule == 1
-                    },
-                    threadList,
-                    response.data_.thread_id_list,
-                    (response.data_.forum?.good_classify ?: emptyList()).wrapImmutable(),
-                    goodClassifyId.takeIf { type == ForumThreadListType.Good },
-                    response.data_.page.has_more == 1
-                )
-            }
-            .onStart { emit(ForumThreadListPartialChange.FirstLoad.Start) }
-            .catch { emit(ForumThreadListPartialChange.FirstLoad.Failure(it)) }
-
-    private fun ForumThreadListUiIntent.Refresh.producePartialChange() =
-        FrsPageRepository.frsPage(
-            forumName,
-            1,
-            1,
-            sortType.takeIf { type == ForumThreadListType.Latest } ?: -1,
-            goodClassifyId.takeIf { type == ForumThreadListType.Good },
-            forceNew = true
-        )
-            .map<FrsPageResponse, ForumThreadListPartialChange.Refresh> { response ->
-                if (response.data_?.page == null) throw TiebaUnknownException
-                val threadList =
-                    response.data_.thread_list.map { ThreadItemData(it.wrapImmutable()) }
-                ForumThreadListPartialChange.Refresh.Success(
-                    threadList,
-                    response.data_.thread_id_list,
-                    (response.data_.forum?.good_classify ?: emptyList()).wrapImmutable(),
-                    goodClassifyId.takeIf { type == ForumThreadListType.Good },
-                    response.data_.page.has_more == 1
-                )
-            }
-            .onStart { emit(ForumThreadListPartialChange.Refresh.Start) }
-            .catch { emit(ForumThreadListPartialChange.Refresh.Failure(it)) }
-
-    private fun ForumThreadListUiIntent.LoadMore.producePartialChange(): Flow<ForumThreadListPartialChange.LoadMore> {
-        val flow = if (threadListIds.isNotEmpty()) {
-            val size = min(threadListIds.size, 30)
-            FrsPageRepository.threadList(
-                forumId,
-                forumName,
-                currentPage,
-                sortType,
-                threadListIds.subList(0, size).joinToString(separator = ",") { "$it" }
-            ).map { response ->
-                if (response.data_ == null) throw TiebaUnknownException
-                val threadList =
-                    response.data_.thread_list.map { ThreadItemData(it.wrapImmutable()) }
-                ForumThreadListPartialChange.LoadMore.Success(
-                    threadList = threadList,
-                    threadListIds = threadListIds.drop(size),
-                    currentPage = currentPage,
-                    hasMore = response.data_.thread_list.isNotEmpty()
-                )
-            }
-        } else {
-            FrsPageRepository.frsPage(
-                forumName,
-                currentPage + 1,
-                2,
-                sortType.takeIf { type == ForumThreadListType.Latest } ?: -1,
-                goodClassifyId.takeIf { type == ForumThreadListType.Good }
-            )
-                .map<FrsPageResponse, ForumThreadListPartialChange.LoadMore> { response ->
-                    if (response.data_?.page == null) throw TiebaUnknownException
-                    val threadList =
-                        response.data_.thread_list.map { ThreadItemData(it.wrapImmutable()) }
-                    ForumThreadListPartialChange.LoadMore.Success(
-                        threadList = threadList,
-                        threadListIds = response.data_.thread_id_list,
-                        currentPage = currentPage + 1,
-                        response.data_.page.has_more == 1
-                    )
-                }
-        }
-        return flow
-            .onStart { emit(ForumThreadListPartialChange.LoadMore.Start) }
-            .catch { emit(ForumThreadListPartialChange.LoadMore.Failure(it)) }
-    }
 
     private fun ForumThreadListUiIntent.Agree.producePartialChange(): Flow<ForumThreadListPartialChange.Agree> =
         TiebaApi.getInstance().opAgreeFlow(
@@ -217,22 +191,19 @@ sealed interface ForumThreadListUiIntent : UiIntent {
         val forumName: String,
         val sortType: Int = -1,
         val goodClassifyId: Int? = null,
+        val forumId: Long = 0,
     ) : ForumThreadListUiIntent
 
     data class Refresh(
         val forumName: String,
         val sortType: Int = -1,
         val goodClassifyId: Int? = null,
+        val forumId: Long = 0,
     ) : ForumThreadListUiIntent
 
-    data class LoadMore(
-        val forumId: Long,
-        val forumName: String,
-        val currentPage: Int,
-        val threadListIds: List<Long>,
-        val sortType: Int = -1,
-        val goodClassifyId: Int? = null,
-    ) : ForumThreadListUiIntent
+    data object SessionChanged : ForumThreadListUiIntent
+
+    data class LoadMore(val manual: Boolean = false) : ForumThreadListUiIntent
 
     data class Agree(
         val threadId: Long,
@@ -242,99 +213,43 @@ sealed interface ForumThreadListUiIntent : UiIntent {
 }
 
 sealed interface ForumThreadListPartialChange : PartialChange<ForumThreadListUiState> {
-    sealed class FirstLoad : ForumThreadListPartialChange {
-        override fun reduce(oldState: ForumThreadListUiState): ForumThreadListUiState =
-            when (this) {
-                Start -> oldState
-                is Success -> oldState.copy(
-                    isRefreshing = false,
-                    forumRuleTitle = forumRuleTitle,
-                    threadList = threadList.distinctById(),
-                    threadListIds = threadListIds.toImmutableList(),
-                    goodClassifies = goodClassifies.toImmutableList(),
-                    goodClassifyId = goodClassifyId,
-                    currentPage = 1,
-                    hasMore = hasMore
+    internal data class Paging(
+        val owned: OwnedPagingChange<ForumListQuery, ForumPagingCursor, ThreadItemData, ForumPageMetadata>,
+    ) : ForumThreadListPartialChange {
+        fun failureEvent(): UiEvent? = owned.ifCurrent<UiEvent?>(null) {
+            val change = owned.change
+            if (change is PagingChange.Failure) ForumThreadListUiEvent.LoadFailure(change.error, owned)
+            else null
+        }
+
+        private fun PagingChange.Success<ForumListQuery, ForumPagingCursor, ThreadItemData, ForumPageMetadata>.applyTo(
+            oldState: ForumThreadListUiState,
+        ): ForumThreadListUiState = oldState.copy(
+            isRefreshing = false,
+            isLoadingMore = false,
+            forumRuleTitle = if (replacing) metadata?.forumRuleTitle else oldState.forumRuleTitle,
+            threadList = (if (replacing) items else oldState.threadList + items).distinctById(),
+            threadListIds = cursor.remainingIds.toImmutableList(),
+            goodClassifies = metadata?.goodClassifies?.toImmutableList() ?: oldState.goodClassifies,
+            goodClassifyId = query.requestClassify,
+            currentPage = cursor.page,
+            hasMore = hasMore,
+            manualContinue = manualContinue,
+        )
+
+        override fun reduce(oldState: ForumThreadListUiState): ForumThreadListUiState = owned.ifCurrent(oldState) {
+            val state = when (val change = owned.change) {
+                is PagingChange.Start -> (if (change.clearList) ForumThreadListUiState() else oldState).copy(
+                    isRefreshing = change.replacing, isLoadingMore = !change.replacing
                 )
-
-                is Failure -> oldState.copy(isRefreshing = false)
-            }
-
-        data object Start : FirstLoad()
-
-        data class Success(
-            val forumRuleTitle: String?,
-            val threadList: List<ThreadItemData>,
-            val threadListIds: List<Long>,
-            val goodClassifies: List<ImmutableHolder<Classify>>,
-            val goodClassifyId: Int?,
-            val hasMore: Boolean,
-        ) : FirstLoad()
-
-        data class Failure(
-            val error: Throwable
-        ) : FirstLoad()
-    }
-
-    sealed class Refresh : ForumThreadListPartialChange {
-        override fun reduce(oldState: ForumThreadListUiState): ForumThreadListUiState =
-            when (this) {
-                Start -> oldState.copy(isRefreshing = true)
-                is Success -> oldState.copy(
-                    isRefreshing = false,
-                    threadList = threadList.distinctById(),
-                    threadListIds = threadListIds.toImmutableList(),
-                    goodClassifies = goodClassifies.toImmutableList(),
-                    goodClassifyId = goodClassifyId,
-                    currentPage = 1,
-                    hasMore = hasMore
+                is PagingChange.Success -> change.applyTo(oldState)
+                is PagingChange.Failure -> (change.progress?.applyTo(oldState) ?: oldState).copy(
+                    isRefreshing = false, isLoadingMore = false
                 )
-
-                is Failure -> oldState.copy(isRefreshing = false)
             }
-
-        data object Start : Refresh()
-
-        data class Success(
-            val threadList: List<ThreadItemData>,
-            val threadListIds: List<Long>,
-            val goodClassifies: List<ImmutableHolder<Classify>>,
-            val goodClassifyId: Int? = null,
-            val hasMore: Boolean,
-        ) : Refresh()
-
-        data class Failure(
-            val error: Throwable
-        ) : Refresh()
-    }
-
-    sealed class LoadMore : ForumThreadListPartialChange {
-        override fun reduce(oldState: ForumThreadListUiState): ForumThreadListUiState =
-            when (this) {
-                Start -> oldState.copy(isLoadingMore = true)
-                is Success -> oldState.copy(
-                    isLoadingMore = false,
-                    threadList = (oldState.threadList + threadList).distinctById(),
-                    threadListIds = threadListIds.toImmutableList(),
-                    currentPage = currentPage,
-                    hasMore = hasMore
-                )
-
-                is Failure -> oldState.copy(isLoadingMore = false)
-            }
-
-        data object Start : LoadMore()
-
-        data class Success(
-            val threadList: List<ThreadItemData>,
-            val threadListIds: List<Long>,
-            val currentPage: Int,
-            val hasMore: Boolean,
-        ) : LoadMore()
-
-        data class Failure(
-            val error: Throwable
-        ) : LoadMore()
+            owned.applied()
+            state
+        }
     }
 
     sealed class Agree private constructor() : ForumThreadListPartialChange {
@@ -409,9 +324,15 @@ data class ForumThreadListUiState(
     val goodClassifies: ImmutableList<ImmutableHolder<Classify>> = persistentListOf(),
     val currentPage: Int = 1,
     val hasMore: Boolean = true,
+    val manualContinue: Boolean = false,
 ) : UiState
 
 sealed interface ForumThreadListUiEvent : UiEvent {
+    internal data class LoadFailure(
+        val error: Throwable,
+        val owned: OwnedPagingChange<ForumListQuery, ForumPagingCursor, ThreadItemData, ForumPageMetadata>,
+    ) : ForumThreadListUiEvent
+
     data class AgreeFail(
         val threadId: Long,
         val postId: Long,

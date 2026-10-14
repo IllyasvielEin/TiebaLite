@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pagination_no_matching_threads">暂未找到符合条件的帖子</string>
+    <string name="pagination_continue_loading">继续加载</string>
+</resources>

@@ -1,5 +1,6 @@
 package com.huanchengfly.tieba.post.ui.page.forum.generaltablist
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,11 +25,13 @@ import androidx.compose.material.Text
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,6 +42,7 @@ import com.huanchengfly.tieba.post.api.models.protos.FrsTabInfo
 import com.huanchengfly.tieba.post.api.models.protos.ThreadInfo
 import com.huanchengfly.tieba.post.api.models.protos.User
 import com.huanchengfly.tieba.post.api.models.protos.abstractText
+import com.huanchengfly.tieba.post.api.retrofit.exception.getErrorMessage
 import com.huanchengfly.tieba.post.arch.BaseComposeActivity.Companion.LocalWindowSizeClass
 import com.huanchengfly.tieba.post.arch.collectPartialAsState
 import com.huanchengfly.tieba.post.arch.onEvent
@@ -61,6 +65,7 @@ import com.huanchengfly.tieba.post.ui.widgets.compose.LoadMoreLayout
 import com.huanchengfly.tieba.post.ui.widgets.compose.LocalSnackbarHostState
 import com.huanchengfly.tieba.post.ui.widgets.compose.MyLazyColumn
 import com.huanchengfly.tieba.post.ui.widgets.compose.VerticalDivider
+import com.huanchengfly.tieba.post.utils.AccountUtil
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.launch
@@ -73,6 +78,7 @@ fun GeneralTabListPage(
     navTabInfo: FrsTabInfo,
     viewModel: GeneralTabListViewModel = pageViewModel(),
 ) {
+    val context = LocalContext.current
     val resources = LocalResources.current
     val navigator = LocalNavigator.current
     val snackbarHostState = LocalSnackbarHostState.current
@@ -91,6 +97,11 @@ fun GeneralTabListPage(
         viewModel.initialized = true
     }
 
+    val accountSession = AccountUtil.sessionGeneration
+    LaunchedEffect(accountSession) {
+        viewModel.send(GeneralTabListUiIntent.SessionChanged)
+    }
+
     val isRefreshing by viewModel.uiState.collectPartialAsState(
         prop1 = GeneralTabListUiState::isRefreshing,
         initial = false
@@ -103,10 +114,6 @@ fun GeneralTabListPage(
         prop1 = GeneralTabListUiState::hasMore,
         initial = true
     )
-    val currentPage by viewModel.uiState.collectPartialAsState(
-        prop1 = GeneralTabListUiState::currentPage,
-        initial = 1
-    )
     val threadList by viewModel.uiState.collectPartialAsState(
         prop1 = GeneralTabListUiState::threadList,
         initial = persistentListOf()
@@ -115,6 +122,16 @@ fun GeneralTabListPage(
         prop1 = GeneralTabListUiState::sortType,
         initial = -1
     )
+
+    val manualContinue by viewModel.uiState.collectPartialAsState(
+        prop1 = GeneralTabListUiState::manualContinue,
+        initial = false
+    )
+    viewModel.onEvent<GeneralTabListUiEvent.LoadFailure> { event ->
+        event.owned.ifCurrent(Unit) {
+            Toast.makeText(context, event.error.getErrorMessage(), Toast.LENGTH_SHORT).show()
+        }
+    }
 
     onGlobalEvent<GeneralTabListUiEvent.BackToTop> {
         lazyListState.animateScrollToItem(0)
@@ -190,20 +207,21 @@ fun GeneralTabListPage(
                 }
             }
 
+            if (manualContinue && hasMore) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(stringResource(R.string.pagination_no_matching_threads))
+                    Chip(
+                        text = stringResource(R.string.pagination_continue_loading),
+                        onClick = { if (!isRefreshing && !isLoadingMore) viewModel.send(GeneralTabListUiIntent.LoadMore(manual = true)) },
+                    )
+                }
+            }
+
             LoadMoreLayout(
                 isLoading = isLoadingMore,
-                onLoadMore = {
-                    viewModel.send(
-                        GeneralTabListUiIntent.LoadMore(
-                            forumId = forumId,
-                            forumName = forumName,
-                            navTabInfo = navTabInfo,
-                            currentPage = currentPage,
-                            lastThreadId = threadList.lastOrNull()?.thread?.get { id } ?: 0,
-                            sortType = sortType,
-                        )
-                    )
-                },
+                onLoadMore = { viewModel.send(GeneralTabListUiIntent.LoadMore()) },
+                enableLoadMore = !isRefreshing && !manualContinue,
+                preloadCount = if (manualContinue) 0 else 3,
                 loadEnd = !hasMore,
                 lazyListState = lazyListState,
                 isEmpty = threadList.isEmpty(),

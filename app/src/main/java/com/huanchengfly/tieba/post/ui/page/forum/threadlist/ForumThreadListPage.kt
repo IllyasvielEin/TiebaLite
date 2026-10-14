@@ -1,6 +1,7 @@
 package com.huanchengfly.tieba.post.ui.page.forum.threadlist
 
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.material.SnackbarResult
 import androidx.compose.material.Text
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -42,6 +44,7 @@ import com.huanchengfly.tieba.post.api.models.protos.User
 import com.huanchengfly.tieba.post.api.models.protos.abstractText
 import com.huanchengfly.tieba.post.api.models.protos.frsPage.Classify
 import com.huanchengfly.tieba.post.arch.BaseComposeActivity.Companion.LocalWindowSizeClass
+import com.huanchengfly.tieba.post.api.retrofit.exception.getErrorMessage
 import com.huanchengfly.tieba.post.arch.ImmutableHolder
 import com.huanchengfly.tieba.post.arch.collectPartialAsState
 import com.huanchengfly.tieba.post.arch.onEvent
@@ -66,45 +69,30 @@ import com.huanchengfly.tieba.post.ui.widgets.compose.LocalSnackbarHostState
 import com.huanchengfly.tieba.post.ui.widgets.compose.MyLazyColumn
 import com.huanchengfly.tieba.post.ui.widgets.compose.VerticalDivider
 import com.huanchengfly.tieba.post.ui.widgets.compose.debounceClickable
+import com.huanchengfly.tieba.post.utils.AccountUtil
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
 private fun getFirstLoadIntent(
     context: Context,
     forumName: String,
+    forumId: Long,
     isGood: Boolean = false,
 ): ForumThreadListUiIntent {
-    return if (isGood) ForumThreadListUiIntent.Refresh(forumName, -1, 0)
-    else ForumThreadListUiIntent.FirstLoad(forumName, getSortType(context, forumName), null)
+    return if (isGood) ForumThreadListUiIntent.Refresh(forumName, -1, 0, forumId)
+    else ForumThreadListUiIntent.FirstLoad(forumName, getSortType(context, forumName), null, forumId)
 }
 
 private fun getRefreshIntent(
     context: Context,
     forumName: String,
+    forumId: Long,
     isGood: Boolean = false,
     sortType: Int = getSortType(context, forumName),
     goodClassifyId: Int? = if (isGood) 0 else null,
 ): ForumThreadListUiIntent {
-    return if (isGood) ForumThreadListUiIntent.Refresh(forumName, -1, goodClassifyId)
-    else ForumThreadListUiIntent.Refresh(forumName, sortType, null)
-}
-
-private fun getLoadMoreIntent(
-    context: Context,
-    forumId: Long,
-    forumName: String,
-    page: Int,
-    threadListIds: List<Long>,
-    isGood: Boolean = false,
-): ForumThreadListUiIntent {
-    return if (isGood) ForumThreadListUiIntent.LoadMore(forumId, forumName, page, threadListIds, 0)
-    else ForumThreadListUiIntent.LoadMore(
-        forumId,
-        forumName,
-        page,
-        threadListIds,
-        getSortType(context, forumName)
-    )
+    return if (isGood) ForumThreadListUiIntent.Refresh(forumName, -1, goodClassifyId, forumId)
+    else ForumThreadListUiIntent.Refresh(forumName, sortType, null, forumId)
 }
 
 private enum class ItemType {
@@ -271,13 +259,8 @@ fun ForumThreadListPage(
     val snackbarHostState = LocalSnackbarHostState.current
 
     LazyLoad(loaded = viewModel.initialized) {
-        viewModel.send(getFirstLoadIntent(context, forumName, isGood))
+        viewModel.send(getFirstLoadIntent(context, forumName, forumId, isGood))
         viewModel.initialized = true
-    }
-    onGlobalEvent<ForumThreadListUiEvent.Refresh>(
-        filter = { it.isGood == isGood },
-    ) {
-        viewModel.send(getRefreshIntent(context, forumName, isGood, it.sortType))
     }
     onGlobalEvent<ForumThreadListUiEvent.BackToTop>(
         filter = { it.isGood == isGood },
@@ -304,6 +287,11 @@ fun ForumThreadListPage(
             )
         }
     }
+    val accountSession = AccountUtil.sessionGeneration
+    LaunchedEffect(accountSession) {
+        viewModel.send(ForumThreadListUiIntent.SessionChanged)
+    }
+
     val isRefreshing by viewModel.uiState.collectPartialAsState(
         prop1 = ForumThreadListUiState::isRefreshing,
         initial = false
@@ -316,20 +304,12 @@ fun ForumThreadListPage(
         prop1 = ForumThreadListUiState::hasMore,
         initial = true
     )
-    val currentPage by viewModel.uiState.collectPartialAsState(
-        prop1 = ForumThreadListUiState::currentPage,
-        initial = 1
-    )
     val forumRuleTitle by viewModel.uiState.collectPartialAsState(
         prop1 = ForumThreadListUiState::forumRuleTitle,
         initial = null
     )
     val threadList by viewModel.uiState.collectPartialAsState(
         prop1 = ForumThreadListUiState::threadList,
-        initial = persistentListOf()
-    )
-    val threadListIds by viewModel.uiState.collectPartialAsState(
-        prop1 = ForumThreadListUiState::threadListIds,
         initial = persistentListOf()
     )
     val goodClassifyId by viewModel.uiState.collectPartialAsState(
@@ -340,9 +320,21 @@ fun ForumThreadListPage(
         prop1 = ForumThreadListUiState::goodClassifies,
         initial = persistentListOf()
     )
+    val manualContinue by viewModel.uiState.collectPartialAsState(
+        prop1 = ForumThreadListUiState::manualContinue,
+        initial = false
+    )
+    onGlobalEvent<ForumThreadListUiEvent.Refresh>(filter = { it.isGood == isGood }) {
+        viewModel.send(getRefreshIntent(context, forumName, forumId, isGood, it.sortType, goodClassifyId))
+    }
+    viewModel.onEvent<ForumThreadListUiEvent.LoadFailure> { event ->
+        event.owned.ifCurrent(Unit) {
+            Toast.makeText(context, event.error.getErrorMessage(), Toast.LENGTH_SHORT).show()
+        }
+    }
     val pullRefreshState = rememberPullRefreshState(
         refreshing = isRefreshing,
-        onRefresh = { viewModel.send(getRefreshIntent(context, forumName, isGood)) }
+        onRefresh = { viewModel.send(getRefreshIntent(context, forumName, forumId, isGood, goodClassifyId = goodClassifyId)) }
     )
     Box(
         modifier = Modifier.fillMaxSize()
@@ -359,6 +351,7 @@ fun ForumThreadListPage(
                             getRefreshIntent(
                                 context,
                                 forumName,
+                                forumId,
                                 true,
                                 goodClassifyId = it
                             )
@@ -367,20 +360,21 @@ fun ForumThreadListPage(
                 )
             }
 
+            if (manualContinue && hasMore) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(stringResource(R.string.pagination_no_matching_threads))
+                    Chip(
+                        text = stringResource(R.string.pagination_continue_loading),
+                        onClick = { if (!isRefreshing && !isLoadingMore) viewModel.send(ForumThreadListUiIntent.LoadMore(manual = true)) },
+                    )
+                }
+            }
+
             LoadMoreLayout(
                 isLoading = isLoadingMore,
-                onLoadMore = {
-                    viewModel.send(
-                        getLoadMoreIntent(
-                            context,
-                            forumId,
-                            forumName,
-                            currentPage,
-                            threadListIds,
-                            isGood
-                        )
-                    )
-                },
+                onLoadMore = { viewModel.send(ForumThreadListUiIntent.LoadMore()) },
+                enableLoadMore = !isRefreshing && !manualContinue,
+                preloadCount = if (manualContinue) 0 else 3,
                 loadEnd = !hasMore,
                 lazyListState = lazyListState,
                 isEmpty = threadList.isEmpty(),
