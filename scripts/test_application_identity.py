@@ -1,6 +1,7 @@
 """Source-level application identity wiring; merged APK/device proof remains required."""
 import json
 from pathlib import Path
+import re
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -12,6 +13,30 @@ NAMESPACE = 'com.huanchengfly.tieba.post'
 
 
 class ApplicationIdentityChecks(unittest.TestCase):
+    def test_version_properties_are_the_only_version_source(self):
+        properties = dict(line.split('=', 1) for line in
+                          (ROOT / 'application.properties').read_text().splitlines()
+                          if line.strip() and not line.startswith('#'))
+        self.assertEqual({'versionCode', 'versionName'}, set(properties))
+        self.assertTrue(properties['versionCode'].isdigit())
+        self.assertGreater(int(properties['versionCode']), 0)
+        self.assertLessEqual(int(properties['versionCode']), 2100000000)
+        self.assertRegex(properties['versionName'], r'^\d+\.\d+\.\d+$')
+        build = (ROOT / 'app/build.gradle.kts').read_text()
+        self.assertIn('val applicationVersionCode = appProperties.getProperty("versionCode").toInt()', build)
+        self.assertIn('val applicationVersionName = appProperties.getProperty("versionName")', build)
+        self.assertEqual(['applicationVersionCode'], re.findall(r'^\s*versionCode\s*=\s*(.+)$', build, re.M))
+        self.assertEqual(['applicationVersionName'], re.findall(r'^\s*versionName\s*=\s*(.+)$', build, re.M))
+        for obsolete in ('isPreRelease', 'preReleaseName', 'preReleaseVer', 'isPerVersion',
+                         'versionNameSuffix', 'GITHUB_SHA', 'applicationVersionName +='):
+            self.assertNotIn(obsolete, build)
+
+    def test_self_build_flag_is_independent_of_version(self):
+        build = (ROOT / 'app/build.gradle.kts').read_text()
+        self.assertIn('val isCI: String? = System.getenv("CI")', build)
+        self.assertIn('val isSelfBuild = isCI.isNullOrEmpty() || !isCI.equals("true", ignoreCase = true)', build)
+        self.assertIn('manifestPlaceholders["is_self_build"] = "$isSelfBuild"', build)
+
     def test_application_id_and_namespace_are_separate(self):
         build = (ROOT / 'app/build.gradle.kts').read_text()
         self.assertIn(f'applicationId = "{APP_ID}"', build)

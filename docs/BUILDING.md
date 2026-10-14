@@ -89,6 +89,13 @@ APK names follow AGP defaults (normally `app-release-unsigned.apk` for the
 unsigned release). Read `output-metadata.json` to locate the actual file and
 version fields; do not reconstruct a filename from the version name.
 
+`application.properties` is the single source for `versionName` and `versionCode`.
+Both local and CI builds use these values unchanged: `4.0.0` and `390103` for
+this revision. No prerelease label or commit SHA is appended to the version name.
+Commit provenance remains in the build metadata, and CI still controls the
+existing self-build flag independently. Future version changes need only those
+two properties; existing APK files are not renamed.
+
 ## GitHub Actions
 
 Run **Build learning APK** manually from Actions. The selected ref is built.

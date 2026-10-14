@@ -28,18 +28,10 @@ plugins {
 // Opt-in isolated emulator fixtures; ordinary debug/release configuration stays unchanged.
 val offlineSmoke = providers.gradleProperty("offlineSmoke").orNull == "true"
 
-val sha: String? = System.getenv("GITHUB_SHA")
 val isCI: String? = System.getenv("CI")
 val isSelfBuild = isCI.isNullOrEmpty() || !isCI.equals("true", ignoreCase = true)
 val applicationVersionCode = appProperties.getProperty("versionCode").toInt()
-var applicationVersionName = appProperties.getProperty("versionName")
-val isPerVersion = appProperties.getProperty("isPreRelease").toBoolean()
-if (isPerVersion) {
-    applicationVersionName += "-${appProperties.getProperty("preReleaseName")}.${appProperties.getProperty("preReleaseVer")}"
-}
-if (!isSelfBuild && !sha.isNullOrEmpty()) {
-    applicationVersionName += "+${sha.substring(0, 7)}"
-}
+val applicationVersionName = appProperties.getProperty("versionName")
 
 wire {
     sourcePath {
