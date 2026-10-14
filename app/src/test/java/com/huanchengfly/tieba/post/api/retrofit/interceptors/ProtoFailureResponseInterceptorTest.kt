@@ -22,6 +22,8 @@ import okio.buffer
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.IOException
+import java.io.InterruptedIOException
+import java.util.concurrent.CancellationException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -96,11 +98,13 @@ class ProtoFailureResponseInterceptorTest {
     }
 
     @Test fun leavesValidBodyAndUnknownFieldsIntactForTheRealConverter() {
-        for (advertised in listOf(validResponse.size.toLong(), -1L)) {
+        for (advertised in listOf(validResponse.size.toLong(), -1L, 0L, 1L, limit)) {
             val body = body(validResponse, advertised)
             client(body).newCall(request()).execute().use {
                 assertFalse(body.closed)
-                assertArrayEquals(validResponse, it.body!!.bytes())
+                // Read the source directly for intentionally dishonest lengths;
+                // ResponseBody.bytes() has its own length-consistency check.
+                assertArrayEquals(validResponse, it.body!!.source().readByteArray())
             }
             assertTrue(body.closed)
         }
@@ -251,6 +255,33 @@ class ProtoFailureResponseInterceptorTest {
         val failure = assertThrows(IOException::class.java) { client(body).newCall(request()).execute() }
         assertEquals("read failed", failure.message)
         assertTrue(body.closed)
+    }
+
+    @Test fun partialReadFailuresTimeoutsCancellationAndFatalErrorsRemainUnchanged() {
+        for (expected in listOf(
+            IOException("partial read failed"),
+            InterruptedIOException("timeout"),
+            CancellationException("cancelled"),
+            OutOfMemoryError("synthetic fatal error"),
+        )) {
+            val body = TrackingBody(object : Source {
+                var firstRead = true
+                override fun read(sink: Buffer, byteCount: Long): Long {
+                    if (firstRead) {
+                        firstRead = false
+                        sink.write(validResponse)
+                        return validResponse.size.toLong()
+                    }
+                    throw expected
+                }
+                override fun timeout(): Timeout = Timeout.NONE
+                override fun close() = Unit
+            }, -1)
+            val actual = assertThrows(expected.javaClass) { client(body).newCall(request()).execute() }
+            assertSame(expected, actual)
+            assertEquals(validResponse.size.toLong(), body.bytesRead)
+            assertTrue(body.closed)
+        }
     }
 
     @Test fun malformedResponseInvokesAsyncFailureInsteadOfHanging() {

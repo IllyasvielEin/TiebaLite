@@ -791,12 +791,11 @@ class App : Application(), SketchFactory {
                     requestContext: RequestContext,
                     fetchResult: FetchResult
                 ): DrawableDecoder? {
+                    // Let format, API and request guards reject before the full-image probe.
+                    val candidate = factory.create(sketch, requestContext, fetchResult)
+                        ?: return null
                     val animatedMimeTypes = setOf("image/gif", "image/webp", "image/heif")
-                    if (fetchResult.mimeType !in animatedMimeTypes) return factory.create(
-                        sketch,
-                        requestContext,
-                        fetchResult
-                    )
+                    if (fetchResult.mimeType !in animatedMimeTypes) return candidate
 
                     val dataSource = fetchResult.dataSource
 
@@ -841,7 +840,7 @@ class App : Application(), SketchFactory {
                         return null
                     }
 
-                    return factory.create(sketch, requestContext, fetchResult)
+                    return candidate
                 }
             }
 

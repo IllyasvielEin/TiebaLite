@@ -39,6 +39,12 @@ Tieba maximum, and a legitimate larger response will now fail with IOException.
 If such a response is encountered, investigate pagination and a sanitized size
 measurement before changing the limit; do not restore unbounded reads.
 
+The size/response-ownership implementation is shared with the JSON interceptor
+through the narrow `withBoundedBody` helper. The independent JSON default is
+16 MiB; this refactor does not change the protobuf cap or envelope mappings.
+See [JSON_RESPONSE_BOUNDARY.md](JSON_RESPONSE_BOUNDARY.md) for the JSON default,
+parser-fallback contract, and current verification limits.
+
 The check runs before both successful-body decoding and return of HTTP error
 bodies, since Retrofit may also buffer the latter. A declared size above the
 limit is rejected without reading; a limit-plus-one probe enforces the bound
