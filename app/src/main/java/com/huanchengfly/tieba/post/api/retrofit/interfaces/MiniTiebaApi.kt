@@ -1,5 +1,6 @@
 package com.huanchengfly.tieba.post.api.retrofit.interfaces
 
+import com.huanchengfly.tieba.post.api.retrofit.BudgetedReadRequest
 import android.text.TextUtils
 import com.huanchengfly.tieba.post.App.ScreenInfo
 import com.huanchengfly.tieba.post.api.Header
@@ -183,6 +184,7 @@ interface MiniTiebaApi {
         @Field("topic") topic: String = "0"
     ): Flow<ForumRecommend>
 
+    @BudgetedReadRequest
     @POST("/c/f/frs/page")
     @FormUrlEncoded
     fun forumPage(
@@ -200,6 +202,7 @@ interface MiniTiebaApi {
         @Field("scr_w") scr_w: String = getScreenWidth().toString()
     ): Call<ForumPageBean>
 
+    @BudgetedReadRequest
     @POST("/c/f/frs/page")
     @FormUrlEncoded
     fun forumPageAsync(
@@ -217,6 +220,7 @@ interface MiniTiebaApi {
         @Field("scr_w") scr_w: String = getScreenWidth().toString()
     ): Deferred<ApiResult<ForumPageBean>>
 
+    @BudgetedReadRequest
     @POST("/c/f/pb/floor")
     @FormUrlEncoded
     fun floor(

@@ -1,5 +1,6 @@
 package com.huanchengfly.tieba.post.api.retrofit.interfaces
 
+import com.huanchengfly.tieba.post.api.retrofit.BudgetedReadRequest
 import com.huanchengfly.tieba.post.api.models.protos.addPost.AddPostResponse
 import com.huanchengfly.tieba.post.api.models.protos.addPollPost.AddPollPostReponse
 import com.huanchengfly.tieba.post.api.models.protos.addThread.AddThreadResponse
@@ -61,12 +62,14 @@ interface OfficialProtobufTiebaApi {
         @Body body: MyMultipartBody,
     ): Flow<ForumGuideResponse>
 
+    @BudgetedReadRequest
     @POST("/c/f/frs/page?cmd=301001")
     fun frsPageFlow(
         @Body body: MyMultipartBody,
         @Header("forum_name") forumName: String? = null,
     ): Flow<FrsPageResponse>
 
+    @BudgetedReadRequest
     @POST("/c/f/frs/threadlist?cmd=301002")
     fun threadListFlow(
         @Body body: MyMultipartBody,
@@ -77,11 +80,13 @@ interface OfficialProtobufTiebaApi {
         @Body body: MyMultipartBody,
     ): Flow<ProfileResponse>
 
+    @BudgetedReadRequest
     @POST("/c/f/pb/page?cmd=302001&format=protobuf")
     fun pbPageFlow(
         @Body body: MyMultipartBody,
     ): Flow<PbPageResponse>
 
+    @BudgetedReadRequest
     @POST("/c/f/pb/floor?cmd=302002&format=protobuf")
     fun pbFloorFlow(
         @Body body: MyMultipartBody,
@@ -147,6 +152,7 @@ interface OfficialProtobufTiebaApi {
         @Body body: MyMultipartBody,
     ): Flow<AddPollPostReponse>
 
+    @BudgetedReadRequest
     @POST("/c/f/frs/generalTabList?cmd=309622&format=protobuf")
     fun generalTabListFlow(
         @Body body: MyMultipartBody,

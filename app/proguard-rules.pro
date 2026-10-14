@@ -279,3 +279,6 @@
 -keepclassmembers,allowobfuscation class * {
  @com.google.gson.annotations.SerializedName <fields>;
 }
+
+# Runtime method marker used by the selective Retrofit call factory.
+-keep @interface com.huanchengfly.tieba.post.api.retrofit.BudgetedReadRequest

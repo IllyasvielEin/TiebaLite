@@ -1,5 +1,6 @@
 package com.huanchengfly.tieba.post.api.retrofit.interfaces
 
+import com.huanchengfly.tieba.post.api.retrofit.BudgetedReadRequest
 import android.os.Build
 import com.huanchengfly.tieba.post.App
 import com.huanchengfly.tieba.post.App.ScreenInfo
@@ -24,6 +25,7 @@ import retrofit2.http.*
 
 
 interface OfficialTiebaApi {
+    @BudgetedReadRequest
     @POST("/c/f/pb/page")
     @FormUrlEncoded
     fun threadContent(
@@ -44,6 +46,7 @@ interface OfficialTiebaApi {
         @retrofit2.http.Header("thread_id") threadIdHeader: String = threadId,
     ): Call<ThreadContentBean>
 
+    @BudgetedReadRequest
     @POST("/c/f/pb/page")
     @FormUrlEncoded
     fun threadContent(
@@ -64,6 +67,7 @@ interface OfficialTiebaApi {
         @retrofit2.http.Header("thread_id") threadIdHeader: String = threadId,
     ): Call<ThreadContentBean>
 
+    @BudgetedReadRequest
     @POST("/c/f/pb/page")
     @FormUrlEncoded
     fun threadContentAsync(
@@ -84,6 +88,7 @@ interface OfficialTiebaApi {
         @retrofit2.http.Header("thread_id") threadIdHeader: String = threadId,
     ): Deferred<ApiResult<ThreadContentBean>>
 
+    @BudgetedReadRequest
     @POST("/c/f/pb/page")
     @FormUrlEncoded
     fun threadContentAsync(
@@ -556,6 +561,7 @@ interface OfficialTiebaApi {
         @Field("is_guest") is_guest: String?,
     ): Flow<UserLikeForumBean>
 
+    @BudgetedReadRequest
     @POST("/c/f/pb/floor")
     @FormUrlEncoded
     fun floor(

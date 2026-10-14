@@ -400,7 +400,7 @@ object RetrofitTiebaApi {
         .addConverterFactory(NullOnEmptyConverterFactory())
         .addConverterFactory(json.asConverterFactory())
         .addConverterFactory(gsonConverterFactory)
-        .client(OkHttpClient.Builder().apply {
+        .callFactory(ReadOnlyRequestCallFactory(OkHttpClient.Builder().apply {
             // Keep OkHttp's platform certificate and hostname verification unchanged.
             followRedirects(false)
             followSslRedirects(false)
@@ -417,7 +417,7 @@ object RetrofitTiebaApi {
             addInterceptor(sortAndSignInterceptor)
             addInterceptor(ConnectivityInterceptor)
             connectionPool(connectionPool)
-        }.build())
+        }.build()))
         .build()
         .create(T::class.java)
 
@@ -430,7 +430,7 @@ object RetrofitTiebaApi {
         .addCallAdapterFactory(FlowCallAdapterFactory.create())
         .addConverterFactory(NullOnEmptyConverterFactory())
         .addConverterFactory(WireConverterFactory.create())
-        .client(OkHttpClient.Builder().apply {
+        .callFactory(ReadOnlyRequestCallFactory(OkHttpClient.Builder().apply {
             // Keep OkHttp's platform certificate and hostname verification unchanged.
             followRedirects(false)
             followSslRedirects(false)
@@ -448,7 +448,7 @@ object RetrofitTiebaApi {
             addInterceptor(sortAndSignInterceptor)
             addInterceptor(ConnectivityInterceptor)
             connectionPool(connectionPool)
-        }.build())
+        }.build()))
         .build()
         .create(T::class.java)
 }
