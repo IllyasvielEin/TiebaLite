@@ -60,7 +60,7 @@ stops safely instead of spinning.
 
 ## Tests and verification boundary
 
-32 new JUnit 4 tests use Channels and CompletableDeferred, with no sleeps:
+33 new JUnit 4 tests use Channels and CompletableDeferred, with no sleeps:
 
 - OwnedPaginationTest: 16 tests for stale success/failure/loading, ignored
   cancellation, final side-effect guards, two-owner isolation, single-flight,
@@ -70,9 +70,9 @@ stops safely instead of spinning.
   ID batches and server continuation independent of visible items.
 - ForumPageMappingTest: 4 tests execute the actual repository mapping functions
   and verify raw tails/IDs, filtering, authors and preserved server metadata.
-- ForumPagingProducerTest: 5 tests execute actual producers, reducers and failure
+- ForumPagingProducerTest: 6 tests execute actual producers, reducers and failure
   event projection, including classification, raw-tail ownership, retryable ID
-  batches, delayed errors and account-clear/reload failures.
+  batches, delayed errors, ownership through public base types and account-clear/reload failures.
 
 The new Kotlin/JUnit tests have not been compiled or run in this workspace.
 The Gradle wrapper checksum passed and `git diff --check` passed. A focused

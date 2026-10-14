@@ -171,10 +171,11 @@ sealed interface GeneralTabListUiIntent : UiIntent {
     ) : GeneralTabListUiIntent
 }
 
-sealed interface GeneralTabListPartialChange : PartialChange<GeneralTabListUiState> {
+// A class permits internal variants without exposing pagination ownership in the public API.
+sealed class GeneralTabListPartialChange : PartialChange<GeneralTabListUiState> {
     internal data class Paging(
         val owned: OwnedPagingChange<GeneralListQuery, GeneralPagingCursor, ThreadItemData, Unit>,
-    ) : GeneralTabListPartialChange {
+    ) : GeneralTabListPartialChange() {
         fun failureEvent(): UiEvent? = owned.ifCurrent<UiEvent?>(null) {
             val change = owned.change
             if (change is PagingChange.Failure) GeneralTabListUiEvent.LoadFailure(change.error, owned)
@@ -209,7 +210,7 @@ sealed interface GeneralTabListPartialChange : PartialChange<GeneralTabListUiSta
         }
     }
 
-    sealed class Agree private constructor() : GeneralTabListPartialChange {
+    sealed class Agree private constructor() : GeneralTabListPartialChange() {
         private fun List<ThreadItemData>.updateAgreeStatus(
             threadId: Long,
             hasAgree: Int,
@@ -282,14 +283,15 @@ data class GeneralTabListUiState(
     val manualContinue: Boolean = false,
 ) : UiState
 
-sealed interface GeneralTabListUiEvent : UiEvent {
+// A class permits internal variants without exposing pagination ownership in the public API.
+sealed class GeneralTabListUiEvent : UiEvent {
     internal data class LoadFailure(
         val error: Throwable,
         val owned: OwnedPagingChange<GeneralListQuery, GeneralPagingCursor, ThreadItemData, Unit>,
-    ) : GeneralTabListUiEvent
+    ) : GeneralTabListUiEvent()
 
-    data object BackToTop : GeneralTabListUiEvent
-    data class Refresh(val sortType: Int = -1) : GeneralTabListUiEvent
+    data object BackToTop : GeneralTabListUiEvent()
+    data class Refresh(val sortType: Int = -1) : GeneralTabListUiEvent()
 
     data class AgreeFail(
         val threadId: Long,
@@ -297,5 +299,5 @@ sealed interface GeneralTabListUiEvent : UiEvent {
         val hasAgree: Int,
         val errorCode: Int,
         val errorMsg: String
-    ) : GeneralTabListUiEvent
+    ) : GeneralTabListUiEvent()
 }

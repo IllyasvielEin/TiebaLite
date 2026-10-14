@@ -212,10 +212,11 @@ sealed interface ForumThreadListUiIntent : UiIntent {
     ) : ForumThreadListUiIntent
 }
 
-sealed interface ForumThreadListPartialChange : PartialChange<ForumThreadListUiState> {
+// A class permits internal variants without exposing pagination ownership in the public API.
+sealed class ForumThreadListPartialChange : PartialChange<ForumThreadListUiState> {
     internal data class Paging(
         val owned: OwnedPagingChange<ForumListQuery, ForumPagingCursor, ThreadItemData, ForumPageMetadata>,
-    ) : ForumThreadListPartialChange {
+    ) : ForumThreadListPartialChange() {
         fun failureEvent(): UiEvent? = owned.ifCurrent<UiEvent?>(null) {
             val change = owned.change
             if (change is PagingChange.Failure) ForumThreadListUiEvent.LoadFailure(change.error, owned)
@@ -252,7 +253,7 @@ sealed interface ForumThreadListPartialChange : PartialChange<ForumThreadListUiS
         }
     }
 
-    sealed class Agree private constructor() : ForumThreadListPartialChange {
+    sealed class Agree private constructor() : ForumThreadListPartialChange() {
         private fun List<ThreadItemData>.updateAgreeStatus(
             threadId: Long,
             hasAgree: Int,
@@ -327,11 +328,12 @@ data class ForumThreadListUiState(
     val manualContinue: Boolean = false,
 ) : UiState
 
-sealed interface ForumThreadListUiEvent : UiEvent {
+// A class permits internal variants without exposing pagination ownership in the public API.
+sealed class ForumThreadListUiEvent : UiEvent {
     internal data class LoadFailure(
         val error: Throwable,
         val owned: OwnedPagingChange<ForumListQuery, ForumPagingCursor, ThreadItemData, ForumPageMetadata>,
-    ) : ForumThreadListUiEvent
+    ) : ForumThreadListUiEvent()
 
     data class AgreeFail(
         val threadId: Long,
@@ -339,18 +341,18 @@ sealed interface ForumThreadListUiEvent : UiEvent {
         val hasAgree: Int,
         val errorCode: Int,
         val errorMsg: String
-    ) : ForumThreadListUiEvent
+    ) : ForumThreadListUiEvent()
 
     data class Refresh(
         val isGood: Boolean,
         val sortType: Int
-    ) : ForumThreadListUiEvent
+    ) : ForumThreadListUiEvent()
 
     data class BackToTop(
         val isGood: Boolean
-    ) : ForumThreadListUiEvent
+    ) : ForumThreadListUiEvent()
 
     data class AddThread(
         val forumName: String,
-    ):ForumThreadListUiEvent
+    ) : ForumThreadListUiEvent()
 }

@@ -51,6 +51,28 @@ class ForumPagingProducerTest {
         suspend fun close() { job.cancelAndJoin() }
     }
 
+    @Test fun forumFailureRetainsOwnershipThroughPublicChangeAndEventBaseTypes() {
+        val epoch = AtomicLong(1)
+        val error = IllegalStateException("old failure")
+        val owned = OwnedPagingChange<ForumListQuery, ForumPagingCursor, ThreadItemData, ForumPageMetadata>(
+            PagingChange.Failure(replacing = false, error = error), epoch, 1,
+        )
+        val paging = ForumThreadListPartialChange.Paging(owned)
+        val change: ForumThreadListPartialChange = paging
+        val event: ForumThreadListUiEvent = paging.failureEvent() as ForumThreadListUiEvent
+        val failure = event as ForumThreadListUiEvent.LoadFailure
+        assertSame(error, failure.error)
+        val loading = ForumThreadListUiState(isLoadingMore = true)
+        assertFalse(change.reduce(loading).isLoadingMore)
+
+        epoch.incrementAndGet()
+        assertNull(paging.failureEvent())
+        assertSame(loading, change.reduce(loading))
+        var delivered = false
+        failure.owned.ifCurrent(Unit) { delivered = true }
+        assertFalse(delivered)
+    }
+
     @Test fun goodProducerRetainsSelectedClassifyForEveryLoadMoreAndClearsOldLoadingOnRefresh() = runBlocking {
         val calls = Channel<Fetch<ForumListQuery, ForumPagingCursor, ForumPageMetadata>>(Channel.UNLIMITED)
         val producer = ForumThreadListPartialChangeProducer(ForumThreadListType.Good, fetchPage = { query, cursor ->
