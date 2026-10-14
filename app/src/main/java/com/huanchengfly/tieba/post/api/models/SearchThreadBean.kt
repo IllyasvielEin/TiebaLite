@@ -37,7 +37,7 @@ data class SearchThreadBean(
         val pid: String,
         val cid: String = "0",
         val title: String,
-        val content: String,
+        val content: String = "",
         val time: String,
         @SerialName("modified_time")
         @SerializedName("modified_time")
@@ -97,7 +97,7 @@ data class SearchThreadBean(
     @Serializable
     data class MainPost(
         val title: String,
-        val content: String,
+        val content: String = "",
         val tid: Long,
         val user: UserInfoBean,
         @SerialName("like_num")
@@ -117,7 +117,7 @@ data class SearchThreadBean(
         val tid: Long,
         val pid: Long,
         val title: String,
-        val content: String,
+        val content: String = "",
         val user: UserInfoBean,
     )
 

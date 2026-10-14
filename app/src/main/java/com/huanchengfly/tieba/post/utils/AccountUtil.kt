@@ -9,6 +9,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.huanchengfly.tieba.post.R
@@ -56,8 +57,19 @@ object AccountUtil {
 
     private var mutableAllAccountsState: MutableState<List<Account>> = mutableStateOf(emptyList())
 
+    private val accountSessionGeneration = mutableLongStateOf(0L)
+
+    /** Non-credential session identity. Switches, initialization and logout invalidate old work. */
+    val sessionGeneration: Long
+        get() = synchronized(this) { accountSessionGeneration.longValue }
+
+    private fun setCurrentAccount(account: Account?) = synchronized(this) {
+        mutableCurrentAccountState.value = account
+        accountSessionGeneration.longValue++
+    }
+
     val currentAccount
-        get() = mutableCurrentAccountState.value
+        get() = synchronized(this) { mutableCurrentAccountState.value }
 
     val allAccounts: List<Account>
         get() = mutableAllAccountsState.value
@@ -70,7 +82,7 @@ object AccountUtil {
                 null
             } else getAccountInfo(loginUser)
         }.getOrNull()
-        mutableCurrentAccountState.value = account
+        setCurrentAccount(account)
         mutableAllAccountsState.value = runBlocking(Dispatchers.IO) { DatabaseUtil.getAllAccounts() }
     }
 
@@ -115,7 +127,7 @@ object AccountUtil {
     fun switchAccount(context: Context, id: Int): Boolean {
         context.sendBroadcast(Intent().setAction(ACTION_SWITCH_ACCOUNT))
         val account = runCatching { getAccountInfo(id) }.getOrNull() ?: return false
-        mutableCurrentAccountState.value = account
+        setCurrentAccount(account)
         GlobalScope.launch {
             emitGlobalEvent(GlobalEvent.AccountSwitched)
         }
@@ -228,7 +240,7 @@ object AccountUtil {
             Toast.makeText(context, "退出登录成功，已切换至账号 " + account.nameShow, Toast.LENGTH_SHORT).show()
             return
         }
-        mutableCurrentAccountState.value = null
+        setCurrentAccount(null)
         context.getSharedPreferences("accountData", Context.MODE_PRIVATE).edit().clear().commit()
         Toast.makeText(context, R.string.toast_exit_account_success, Toast.LENGTH_SHORT).show()
     }

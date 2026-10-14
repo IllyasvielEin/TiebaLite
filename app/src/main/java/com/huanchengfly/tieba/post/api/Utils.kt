@@ -1,8 +1,8 @@
 package com.huanchengfly.tieba.post.api
 
-import android.os.Build
 import com.huanchengfly.tieba.post.App
 import com.huanchengfly.tieba.post.App.ScreenInfo
+import java.io.IOException
 
 
 private val defaultUserAgent: String =
@@ -13,9 +13,10 @@ fun getUserAgent(appendString: String? = null): String {
     return "${App.Config.userAgent ?: defaultUserAgent}$append"
 }
 
+@Throws(IOException::class)
 fun getCookie(vararg cookies: Pair<String, () -> String?>): String {
-    return cookies.map { it.first to it.second() }.filterNot { it.second.isNullOrEmpty() }
-        .joinToString("; ") { "${it.first}:${it.second}" }
+    return cookies.mapNotNull { (name, supplier) -> CookieHeaderBuilder.pair(name, supplier()) }
+        .joinToString("; ")
 }
 
 fun getScreenHeight(): Int = ScreenInfo.EXACT_SCREEN_HEIGHT
